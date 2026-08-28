@@ -115,6 +115,15 @@
     return stripCodes(String(lore || '').split('\n')[0] || '').trim();
   }
 
+  /* Recombobulated items mark their lore rarity footer with §k obfuscation. */
+  function isRecombed(lore) {
+    var lines = String(lore || '').split('\n');
+    for (var i = lines.length - 1; i >= 0; i--) {
+      if (TIER_RE.test(stripCodes(lines[i]))) return lines[i].indexOf('§k') !== -1;
+    }
+    return false;
+  }
+
   function kindOf(cat) {
     if (cat === 'weapon' || cat === 'armor' || cat === 'accessories') return cat;
     return 'other';
@@ -162,19 +171,21 @@
     var subBits = [catLabel(a.category)];
     if (cn.stars) subBits.push(cn.stars);
 
+    var rc = isRecombed(a.item_lore);
+
     // New Year Cakes: the year (first lore line) is the entire value.
     if (cn.name.lastIndexOf('New Year Cake', 0) === 0) {
       var year = firstLoreLine(a.item_lore);
       return {
         key: 'item|' + cn.name + '|' + year + '|' + tier,
         display: year ? cn.name + ' (' + year + ')' : cn.name,
-        sub: subBits.join(' · '), kind: kindOf(a.category), tier: tier
+        sub: subBits.join(' · '), kind: kindOf(a.category), tier: tier, rc: rc
       };
     }
 
     return {
       key: 'item|' + cn.name + '|' + cn.stars + '|' + tier,
-      display: cn.name, sub: subBits.join(' · '), kind: kindOf(a.category), tier: tier
+      display: cn.name, sub: subBits.join(' · '), kind: kindOf(a.category), tier: tier, rc: rc
     };
   }
 
@@ -193,6 +204,37 @@
     var h = 0;
     for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     return h;
+  }
+
+  /* Cheap vanilla-table enchants at level V or below add no real value — a
+     "Growth V, Protection V" piece IS a clean piece. Only names on this list
+     get dropped; anything unknown (attributes, ultimates, progress enchants)
+     stays significant, and level VI+ always counts. */
+  var WORTHLESS_ENCH = {};
+  ['Growth', 'Protection', 'Blast Protection', 'Fire Protection', 'Projectile Protection',
+   'Sharpness', 'Smite', 'Bane of Arthropods', 'Critical', 'Cleave', 'Giant Killer',
+   'Cubism', 'Execute', 'Impaling', 'Lethality', 'Life Steal', 'Looting', 'Luck',
+   'Scavenger', 'Vampirism', 'Venomous', 'Thunderlord', 'Fire Aspect', 'Knockback',
+   'Punch', 'Experience', 'Efficiency', 'Fortune', 'Unbreaking', 'Respiration',
+   'Depth Strider', 'Feather Falling', 'Frost Walker', 'Thorns', 'Sugar Rush',
+   'Power', 'Snipe', 'Aiming', 'Infinite Quiver', 'Magnet', 'Harvesting', 'Angler',
+   'Caster', 'Frail', 'Lure', 'Spiked Hook', 'Piercing', 'Prosecute', 'Titan Killer',
+   'Ender Slayer', 'First Strike', 'Triple-Strike', 'Smarty Pants', 'Rejuvenate'
+  ].forEach(function (n) { WORTHLESS_ENCH[n] = true; });
+
+  var ROMAN = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+  function romanVal(r) {
+    var v = 0;
+    for (var i = 0; i < r.length; i++) {
+      var cur = ROMAN[r.charAt(i)] || 0;
+      var nxt = ROMAN[r.charAt(i + 1)] || 0;
+      v += cur < nxt ? -cur : cur;
+    }
+    return v;
+  }
+  function isNoiseEnch(seg) {
+    var m = /^(.*\S)\s+([IVXLCDM]+)$/.exec(seg);
+    return !!(m && WORTHLESS_ENCH[m[1]] && romanVal(m[2]) <= 5);
   }
 
   /* "Legion V, Growth V, Hecatomb X" / "Vampiric Vitality IV" / "Chimera I" */
@@ -227,7 +269,11 @@
         // one token PER enchant, so "Growth V, Protection V" and a wrapped or
         // reordered list of the same enchants produce identical tokens
         var segs = tl.split(', ');
-        for (var s2 = 0; s2 < segs.length; s2++) out.push(hashStr(segs[s2].trim()));
+        for (var s2 = 0; s2 < segs.length; s2++) {
+          var sg = segs[s2].trim();
+          if (isNoiseEnch(sg)) continue; // Growth V / Prot V etc. — clean in disguise
+          out.push(hashStr(sg));
+        }
         continue;
       }
       if (/^[A-Za-z ]+ Pet(, .+)?$/.test(t)) { out.push(hashStr(t)); continue; } // pet footer names the applied skin
@@ -465,14 +511,19 @@
             lastWindow: remote.lastWindow || 0,
             samples: remote.samples
           };
-          // local week history survives adoption — keep the richer bucket set per key
-          var sumN = function (w) { var n = 0; for (var i = 0; i < w.length; i++) n += w[i][2]; return n; };
+          // local week history survives adoption — union buckets by day (only
+          // in-window ones), keeping the larger count where both saw a day
+          var today7 = Math.floor(Date.now() / DAY_MS) - 7;
           for (var lk in localSmp) {
-            var lw = localSmp[lk].w;
-            if (!lw || !lw.length) continue;
+            var lw = (localSmp[lk].w || []).filter(function (b) { return b[0] > today7; });
+            if (!lw.length) continue;
             var rs = self.data.samples[lk];
-            if (!rs) self.data.samples[lk] = { c: 0, ps: [], t: localSmp[lk].t, w: lw };
-            else if (!rs.w || sumN(rs.w) < sumN(lw)) rs.w = lw;
+            if (!rs) { self.data.samples[lk] = { c: 0, ps: [], t: localSmp[lk].t, w: lw }; continue; }
+            var byDay = {};
+            (rs.w || []).forEach(function (b) { byDay[b[0]] = b; });
+            lw.forEach(function (b) { if (!byDay[b[0]] || byDay[b[0]][2] < b[2]) byDay[b[0]] = b; });
+            var days = Object.keys(byDay).map(Number).sort(function (a2, b2) { return a2 - b2; });
+            rs.w = days.slice(-7).map(function (dd) { return byDay[dd]; });
           }
           self.save();
           return true;
@@ -530,7 +581,7 @@
           if (!c) continue;
           var g = groups.get(c.key);
           if (!g) {
-            g = { display: c.display, sub: c.sub, kind: c.kind, tier: c.tier, listings: [] };
+            g = { display: c.display, sub: c.sub, kind: c.kind, tier: c.tier, rc: !!c.rc, listings: [] };
             groups.set(c.key, g);
           }
           g.listings.push({ p: a.starting_bid, uuid: a.uuid, s: sigOf(a.item_lore) });
@@ -691,7 +742,7 @@
           profit: profit, roi: roi, supply: cn + 1, groupSize: n,
           median: median, risk: risk, why: why,
           sold: d.sold, estDay: d.estDay, soldMedian: d.soldMedian,
-          weekAvg: d.weekAvg, weekN: d.weekN,
+          weekAvg: d.weekAvg, weekN: d.weekN, recomb: g.rc,
           ladder: [buy.p].concat(comp.slice(0, 7).map(function (x) { return x.p; }))
         });
       }
@@ -712,7 +763,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 10,
+    version: 11,
     scan: scan,
     rebuild: rebuild,
     setOptions: setOptions,

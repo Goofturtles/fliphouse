@@ -299,6 +299,17 @@ p.set-hint { margin: 4px 0 14px; }
 }
 .cv { display: block; }
 .cw { display: block; color: var(--faint); font: 500 11px/1.5 var(--font-num); }
+.rcb {
+  display: inline-block;
+  font: 700 10px/1.5 var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--r-mythic);
+  border: 1px solid rgba(255, 126, 242, 0.35);
+  background: rgba(255, 126, 242, 0.08);
+  border-radius: 8px;
+  padding: 0 5px;
+  vertical-align: 1px;
+}
 .cv.profit { color: var(--green); }
 .cv.roi { color: var(--muted); }
 

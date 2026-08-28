@@ -365,7 +365,9 @@
           '<span class="chev" aria-hidden="true"></span>' +
           '<span class="rar-dot bg-' + rk + '"></span>' +
           '<div class="iw">' +
-            '<span class="iname r-' + rk + '">' + esc(f.name) + '</span>' +
+            '<span class="iname r-' + rk + '">' + esc(f.name) +
+              (f.recomb ? ' <span class="rcb" role="img" aria-label="recombobulated" title="Recombobulated — rarity upgraded, fewer buyers want these">⇧ rc</span>' : '') +
+            '</span>' +
             '<span class="isub">' + esc(f.sub) + ' · ' + esc(String(f.tier).replace('_', ' ').toLowerCase()) + ' · ' + f.supply + ' alike' + lotTag + '</span>' +
           '</div>' +
         '</div>' +
