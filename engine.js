@@ -196,7 +196,9 @@
      reforge/star rolls don't matter; enchant/ability/dye lines must match;
      gem lines keep their color codes (filled vs empty slots differ). */
 
-  var GEM_RE = /[❁❈☘⸕✎✧❂✿]/;
+  /* gem/dye glyphs — Hypixel now renders gem slots with private-use glyphs
+     (, ⚔, ☤ …), so the whole PUA range counts */
+  var GEM_RE = /[\u2741\u2748\u2618\u2E15\u270E\u2727\u2742\u273F\u2694\u2624\uE000-\uF8FF]/;
   var STAT_RE = /^([A-Za-z][A-Za-z '\-]{0,28}):\s*[+\-]?[\d.]/;
   var ENCH_SEG = /^[A-Za-z][A-Za-z' \-]*\s[IVXLCDM]+$/;
 
@@ -263,6 +265,9 @@
       if (t.charAt(0) === '▸') continue;      // pet XP progress
       if (STAT_RE.test(t)) continue;          // numeric stat rolls
       if (t.indexOf('Pet Candy Used') !== -1) { out.push(hashStr(t)); continue; } // "(2/10) Pet Candy Used" — candied ≠ clean
+      // gem slots: filled vs empty vs locked lives ONLY in the color codes
+      // (§8[§8x§8] empty · §8[§7x§8] unlocked · §9[§dx§9] filled) — hash RAW
+      if (t.lastIndexOf('Gemstones:', 0) === 0) { out.push(hashStr(raw)); continue; }
       if (GEM_RE.test(raw)) { out.push(hashStr(raw)); continue; }
       var tl = t.replace(/,\s*$/, ''); // wrapped enchant lists end mid-list with a comma
       if (isEnchLine(tl)) {
@@ -785,7 +790,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 13,
+    version: 14,
     scan: scan,
     rebuild: rebuild,
     setOptions: setOptions,
