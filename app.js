@@ -203,6 +203,10 @@
 
   /* ---------- rendering ---------- */
 
+  // stagger the row-entrance animation only on fresh renders, not on the
+  // 65s demand rebuilds (those must not flicker or steal attention)
+  var animateNext = false;
+
   function render() {
     var base = baseFiltered();
     var visible = visibleFlips(base);
@@ -379,7 +383,9 @@
       (hiddenRisky > 0 ? ' · ' + hiddenRisky + ' risky hidden' : '') + coverageNote();
 
     var html = [];
-    for (var i = 0; i < cap; i++) html.push(rowHtml(visible[i]));
+    for (var i = 0; i < cap; i++) html.push(rowHtml(visible[i], i));
+    els.flipList.classList.toggle('anim', animateNext);
+    animateNext = false;
     els.flipList.innerHTML = html.join('');
 
     els.showMoreBtn.hidden = visible.length <= cap;
@@ -402,7 +408,7 @@
     return s;
   }
 
-  function rowHtml(f) {
+  function rowHtml(f, idx) {
     var rk = rarKey(f.tier);
     var riskLabel = f.risk === 'low' ? 'solid' : f.risk === 'med' ? 'fair' : 'risky';
     var ladder = f.ladder.map(function (p, i) {
@@ -412,7 +418,7 @@
     var relist = fmt(Math.max(f.sell - 1, f.buy));
     var lotTag = f.lot > 0 ? ' · lot ' + (f.lot + 1) : '';
     var basisNote = f.basis === 'median' ? 'the market median' : f.basis === 'sold' ? 'the recent sold price' : 'just under the next listing';
-    return '<details class="row" data-k="' + esc(f.key) + '|' + f.lot + '">' +
+    return '<details class="row" style="--i:' + Math.min(idx || 0, 18) + '" data-k="' + esc(f.key) + '|' + f.lot + '">' +
       '<summary class="rgrid">' +
         '<div class="c-item">' +
           '<span class="chev" aria-hidden="true"></span>' +
@@ -490,7 +496,7 @@
     state.flips = result.flips;
     state.meta = result.meta;
     lsSet(LS_SCAN, { flips: result.flips, meta: result.meta });
-    if (preserve) renderPreserving(); else { state.showAll = false; render(); }
+    if (preserve) renderPreserving(); else { state.showAll = false; animateNext = true; render(); }
     tickAge();
   }
 
@@ -617,9 +623,15 @@
     searchTimer = setTimeout(function () {
       state.search = els.searchInput.value;
       state.showAll = false;
+      animateNext = true;
       render();
     }, 150);
   });
+
+  var topBar = document.querySelector('.top');
+  window.addEventListener('scroll', function () {
+    topBar.classList.toggle('scrolled', window.scrollY > 8);
+  }, { passive: true });
 
   els.sortSel.addEventListener('change', function () { state.sort = els.sortSel.value; onFilterChange(); });
   els.minProfitSel.addEventListener('change', function () { state.minProfit = Number(els.minProfitSel.value); onFilterChange(); });
@@ -723,6 +735,9 @@
   renderCatChips();
 
   var cached = lsGet(LS_SCAN);
+  // a cache this old shows fossil prices with fossil risk labels — worse
+  // than showing the scan progress instead
+  if (cached && cached.meta && Date.now() - cached.meta.scannedAt > 30 * 60000) cached = null;
   if (validScan(cached)) {
     state.flips = cached.flips;
     state.meta = cached.meta;

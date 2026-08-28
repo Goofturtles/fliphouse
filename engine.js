@@ -862,7 +862,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 19,
+    version: 21,
     setNpcTable: function (map) { if (map && typeof map === 'object') NPC_BUY = map; },
     scan: scan,
     rebuild: rebuild,

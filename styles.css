@@ -24,6 +24,7 @@
   --r-divine: #7df3f3;
   --r-special: #ff7a7a;
 
+  --ease: cubic-bezier(0.22, 0.9, 0.3, 1);
   --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-num: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
   --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
@@ -57,6 +58,8 @@ h3 { font-size: 16px; line-height: 1.35; }
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-soft);
 }
+.top { transition: box-shadow 0.25s var(--ease); }
+.top.scrolled { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); }
 .top-in { display: flex; align-items: center; justify-content: space-between; height: 58px; }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); min-width: 0; }
 .coin { width: 26px; height: 26px; flex: none; }
@@ -80,7 +83,7 @@ h3 { font-size: 16px; line-height: 1.35; }
 .btn:hover { background: #1d222a; border-color: #2e3742; }
 .btn:active { transform: translateY(1px); }
 .btn-gold { background: var(--gold); border-color: var(--gold); color: #23190a; }
-.btn-gold:hover { background: #ffd579; border-color: #ffd579; }
+.btn-gold:hover { background: #ffd579; border-color: #ffd579; box-shadow: 0 4px 18px rgba(246, 196, 84, 0.25); }
 .btn[disabled] { opacity: 0.55; cursor: default; transform: none; }
 
 /* ---------- hero ---------- */
@@ -102,7 +105,14 @@ h3 { font-size: 16px; line-height: 1.35; }
 #scanLabel { font-size: 13px; color: var(--muted); }
 #scanLabel.err { color: var(--red); }
 .scan-track { height: 6px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--border-soft); overflow: hidden; }
-.scan-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--gold-deep), var(--gold)); border-radius: 99px; transition: width 0.25s ease; }
+.scan-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--gold-deep), var(--gold)); border-radius: 99px; transition: width 0.25s ease; position: relative; overflow: hidden; }
+.scan-fill::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.2s linear infinite;
+}
+@keyframes shimmer { to { transform: translateX(100%); } }
 
 /* ---------- stats ---------- */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 30px 0 26px; }
@@ -113,7 +123,14 @@ h3 { font-size: 16px; line-height: 1.35; }
   padding: 16px 18px;
   display: flex; flex-direction: column; gap: 2px;
   min-width: 0;
+  position: relative; overflow: hidden;
+  transition: transform 0.22s var(--ease), border-color 0.22s var(--ease);
 }
+.stat::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(246, 196, 84, 0.35), transparent);
+}
+.stat:hover { transform: translateY(-2px); border-color: var(--border); }
 .stat-v { font: 700 24px/1.3 var(--font-num); letter-spacing: -0.01em; }
 .stat-v.good { color: var(--green); }
 .stat-l { color: var(--faint); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
@@ -283,8 +300,29 @@ p.set-hint { margin: 4px 0 14px; }
 .set-check { margin-top: 6px; }
 
 /* ---------- results table ---------- */
-.results { margin-bottom: 40px; }
-.result-count { color: var(--faint); font-size: 13px; margin: 0 0 8px; min-height: 19px; }
+.results {
+  margin-bottom: 40px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  padding: 4px 8px 12px;
+}
+.result-count { color: var(--faint); font-size: 13px; margin: 0; min-height: 19px; padding: 10px 10px 2px; }
+
+@keyframes rowIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.anim .row { animation: rowIn 0.32s var(--ease) backwards; animation-delay: calc(var(--i, 0) * 22ms); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.pricecheck:not([hidden]), .plan-box { animation: fadeIn 0.25s var(--ease); }
+
+/* expanding rows glide open where the browser supports it */
+@supports (interpolate-size: allow-keywords) {
+  :root { interpolate-size: allow-keywords; }
+  .row::details-content {
+    block-size: 0; overflow: clip;
+    transition: block-size 0.28s var(--ease), content-visibility 0.28s allow-discrete;
+  }
+  .row[open]::details-content { block-size: auto; }
+}
 
 .rgrid {
   display: grid;
@@ -294,7 +332,8 @@ p.set-hint { margin: 4px 0 14px; }
 }
 .thead {
   position: sticky; top: 58px; z-index: 10;
-  background: var(--bg);
+  background: var(--panel);
+  border-radius: 12px 12px 0 0;
   color: var(--faint);
   font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
   padding: 10px 16px;
@@ -305,9 +344,11 @@ p.set-hint { margin: 4px 0 14px; }
 .row {
   border-bottom: 1px solid var(--border-soft);
   background: transparent;
-  transition: background 0.12s;
+  border-radius: 10px;
+  transition: background 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
-.row[open], .row:hover { background: var(--panel); }
+.row[open], .row:hover { background: var(--panel-2); }
+.row[open] { box-shadow: inset 2px 0 0 var(--gold); }
 .row summary { list-style: none; cursor: pointer; padding: 12px 16px; }
 .row summary::-webkit-details-marker { display: none; }
 .row summary:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; border-radius: 8px; }
@@ -468,6 +509,8 @@ p.set-hint { margin: 4px 0 14px; }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .stat-v { font-size: 20px; }
 
+  .results { background: none; border: 0; padding: 0; }
+  .result-count { padding: 0 2px 8px; }
   .row { border: 1px solid var(--border-soft); border-radius: 16px; margin-bottom: 10px; background: var(--panel); }
   .rgrid { grid-template-columns: repeat(3, 1fr); gap: 12px 10px; }
   .row summary { padding: 14px; position: relative; }
@@ -508,6 +551,6 @@ body.has-data .hero h1 { /* keep the page's only h1 in the accessibility tree */
 body.has-data .scan-panel { margin-top: 10px; }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; }
+  * { transition: none !important; animation: none !important; }
   html { scroll-behavior: auto; }
 }
