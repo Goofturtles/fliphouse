@@ -44,7 +44,10 @@
     hideRisky: true,
     showAll: false,
     scanning: false,
-    autoRescan: false
+    autoRescan: false,
+    ex: { skins: false, dyes: false, runes: false, recomb: false, pets: false, books: false },
+    minRoi: 0,
+    minRate: 0
   };
 
   var els = {};
@@ -53,7 +56,8 @@
    'budgetChips', 'budgetInput', 'budgetApply', 'planPanel',
    'searchInput', 'catChips', 'sortSel', 'minProfitSel', 'hideRisky',
    'lotsSel', 'minSupplySel', 'autoRescanChk',
-   'resultCount', 'flipList', 'showMoreBtn', 'toast'
+   'exSkins', 'exDyes', 'exRunes', 'exRecomb', 'exPets', 'exBooks', 'minRoiSel', 'minRateSel',
+   'resultCount', 'flipList', 'showMoreBtn', 'toast', 'priceCheck', 'pcRows'
   ].forEach(function (id) { els[id] = document.getElementById(id); });
 
   /* ---------- utils ---------- */
@@ -158,6 +162,14 @@
       if (f.profit < state.minProfit) return false;
       if (state.hideRisky && f.risk === 'high') return false;
       if (state.cat !== 'all' && f.kind !== state.cat) return false;
+      if (state.ex.skins && /\sSkin$/.test(f.name)) return false;
+      if (state.ex.dyes && /\sDye$/.test(f.name)) return false;
+      if (state.ex.runes && (f.name.charAt(0) === '◆' || / Rune\b/.test(f.name))) return false;
+      if (state.ex.recomb && f.recomb) return false;
+      if (state.ex.pets && f.kind === 'pet') return false;
+      if (state.ex.books && f.kind === 'book') return false;
+      if (state.minRoi && f.roi < state.minRoi) return false;
+      if (state.minRate && !(f.estDay >= state.minRate)) return false;
       if (q && f.name.toLowerCase().indexOf(q) === -1) return false;
       return true;
     });
@@ -190,6 +202,39 @@
     renderBudgetChips(base);
     renderPlan(visible);
     renderList(visible);
+    renderPriceCheck();
+  }
+
+  /* Search doubles as a price lookup: real sold averages for any item,
+     flip or not. */
+  function renderPriceCheck() {
+    var q = state.search.trim();
+    var rows = q.length >= 2 ? window.FlipEngine.sales.priceCheck(q) : [];
+    if (!rows.length) { els.priceCheck.hidden = true; els.pcRows.innerHTML = ''; return; }
+    function cell(l, v, n) {
+      return '<div class="pc-cell"><span class="pc-l">' + l + '</span><b>' + v + '</b>' +
+        (n ? '<span class="pc-n">' + n + '</span>' : '<span class="pc-n">&nbsp;</span>') + '</div>';
+    }
+    function variantLabel(r) {
+      if (r.kind === 'pet') return 'Pet · Lvl ' + (r.parts[3] || '?') + ' · ' + String(r.parts[2] || '').replace('_', ' ').toLowerCase();
+      if (r.kind === 'book') return 'Enchanted Book';
+      var bits = [];
+      if (r.parts[2]) bits.push(r.parts[2]);
+      if (r.parts[3]) bits.push(String(r.parts[3]).replace('_', ' ').toLowerCase());
+      return bits.join(' · ') || 'item';
+    }
+    els.priceCheck.hidden = false;
+    els.pcRows.innerHTML = rows.map(function (r) {
+      var tier = rarKey(r.kind === 'item' ? r.parts[3] : r.parts[2]);
+      return '<div class="pc-row">' +
+        '<div class="pc-name"><span class="iname r-' + tier + '">' + esc(r.name) + '</span>' +
+          '<span class="isub">' + esc(variantLabel(r)) + '</span></div>' +
+        cell('Today avg', r.todayAvg != null ? fmt(r.todayAvg) : '—', r.todayN ? r.todayN + ' sold' : '') +
+        cell('7-day avg', r.weekAvg != null ? fmt(r.weekAvg) : '—', r.weekN ? r.weekN + ' sold' : '') +
+        cell('Sells', fmtRate(r.estDay), '') +
+        cell('Cheapest now', r.lowestBin != null ? fmt(r.lowestBin) : '—', r.listed ? r.listed + ' listed' : '') +
+      '</div>';
+    }).join('');
   }
 
   /* Re-render but keep open rows open and put focus back where it was. */
@@ -506,7 +551,8 @@
       budget: state.budget, cat: state.cat, sort: state.sort,
       minProfit: state.minProfit, hideRisky: state.hideRisky,
       basis: eng.basis, lots: eng.lots, minSupply: eng.minSupply,
-      autoRescan: state.autoRescan
+      autoRescan: state.autoRescan,
+      ex: state.ex, minRoi: state.minRoi, minRate: state.minRate
     });
   }
 
@@ -590,6 +636,17 @@
     window.FlipEngine.setOptions({ minSupply: Number(els.minSupplySel.value) });
     onEngineOptionChange();
   });
+  // hide-from-results toggles + floor selects
+  var EX_IDS = { skins: 'exSkins', dyes: 'exDyes', runes: 'exRunes', recomb: 'exRecomb', pets: 'exPets', books: 'exBooks' };
+  Object.keys(EX_IDS).forEach(function (k) {
+    els[EX_IDS[k]].addEventListener('change', function () {
+      state.ex[k] = els[EX_IDS[k]].checked;
+      onFilterChange();
+    });
+  });
+  els.minRoiSel.addEventListener('change', function () { state.minRoi = Number(els.minRoiSel.value); onFilterChange(); });
+  els.minRateSel.addEventListener('change', function () { state.minRate = Number(els.minRateSel.value); onFilterChange(); });
+
   var rescanTimer = null;
   function applyAutoRescan() {
     clearInterval(rescanTimer);
@@ -627,6 +684,11 @@
     if (typeof prefs.minProfit === 'number') state.minProfit = prefs.minProfit;
     if (typeof prefs.hideRisky === 'boolean') state.hideRisky = prefs.hideRisky;
     if (typeof prefs.autoRescan === 'boolean') state.autoRescan = prefs.autoRescan;
+    if (prefs.ex && typeof prefs.ex === 'object') {
+      for (var xk in state.ex) { if (typeof prefs.ex[xk] === 'boolean') state.ex[xk] = prefs.ex[xk]; }
+    }
+    if (typeof prefs.minRoi === 'number') state.minRoi = prefs.minRoi;
+    if (typeof prefs.minRate === 'number') state.minRate = prefs.minRate;
     window.FlipEngine.setOptions({ basis: prefs.basis, lots: prefs.lots, minSupply: prefs.minSupply });
   }
 
@@ -641,6 +703,11 @@
   els.minProfitSel.value = String(state.minProfit);
   if (!els.minProfitSel.value) { state.minProfit = 100000; els.minProfitSel.value = '100000'; }
   els.hideRisky.checked = state.hideRisky;
+  Object.keys(EX_IDS).forEach(function (k) { els[EX_IDS[k]].checked = state.ex[k]; });
+  els.minRoiSel.value = String(state.minRoi);
+  if (!els.minRoiSel.value) { state.minRoi = 0; els.minRoiSel.value = '0'; }
+  els.minRateSel.value = String(state.minRate);
+  if (!els.minRateSel.value) { state.minRate = 0; els.minRateSel.value = '0'; }
 
   renderCatChips();
 

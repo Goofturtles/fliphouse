@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=16">
+  <link rel="stylesheet" href="styles.css?v=18">
 </head>
 <body>
 
@@ -123,8 +123,40 @@
         <p class="set-hint" id="supplyHint">Higher = safer price evidence, fewer flips.</p>
         <label class="check set-check"><input type="checkbox" id="autoRescanChk"> Auto-rescan every 2.5 min</label>
       </div>
+      <fieldset class="set-block">
+        <legend>Hide from results</legend>
+        <div class="ex-grid">
+          <label class="check"><input type="checkbox" id="exSkins"> Skins</label>
+          <label class="check"><input type="checkbox" id="exDyes"> Dyes</label>
+          <label class="check"><input type="checkbox" id="exRunes"> Runes</label>
+          <label class="check"><input type="checkbox" id="exRecomb"> Recombobulated</label>
+          <label class="check"><input type="checkbox" id="exPets"> Pets</label>
+          <label class="check"><input type="checkbox" id="exBooks"> Enchanted Books</label>
+        </div>
+        <label class="set-row" for="minRoiSel"><span>Min ROI</span>
+          <select id="minRoiSel">
+            <option value="0" selected>Any</option>
+            <option value="0.1">10%+</option>
+            <option value="0.25">25%+</option>
+            <option value="0.5">50%+</option>
+          </select></label>
+        <label class="set-row" for="minRateSel"><span>Min sells/day</span>
+          <select id="minRateSel">
+            <option value="0" selected>Any</option>
+            <option value="1">1+</option>
+            <option value="5">5+</option>
+            <option value="24">24+</option>
+          </select></label>
+        <p class="set-hint">Sells/day floor only counts items with observed sales.</p>
+      </fieldset>
     </div>
   </details>
+
+  <section class="card pricecheck" id="priceCheck" hidden aria-label="Price check">
+    <h2>Price check</h2>
+    <p class="muted pc-hint">Real sold prices from watched sales — averages for today and the last 7 days.</p>
+    <div id="pcRows"></div>
+  </section>
 
   <section class="results" aria-label="Flips">
     <p class="result-count" id="resultCount"></p>
@@ -184,7 +216,7 @@
 <div id="toast" role="status"></div>
 
 <noscript><p style="text-align:center;padding:40px;color:#e8ecf1;background:#0b0d10">Fliphouse needs JavaScript to scan the auction house.</p></noscript>
-<script src="engine.js?v=16"></script>
-<script src="app.js?v=16"></script>
+<script src="engine.js?v=18"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

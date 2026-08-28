@@ -266,6 +266,10 @@
       if (!t) continue;
       if (TIER_RE.test(t)) continue;          // rarity footer (incl. recomb noise)
       if (t.charAt(0) === '▸') continue;      // pet XP progress
+      // progression stat lines ARE identity: kill counts / visitors served
+      // ("Piece Bonus: +300", "MAXED OUT! NICE!") separate maxed from fresh
+      if (t.lastIndexOf('Piece Bonus:', 0) === 0) { out.push(hashStr(t)); continue; }
+      if (t.indexOf('MAXED OUT') !== -1) { out.push(hashStr(t)); continue; }
       if (STAT_RE.test(t)) continue;          // numeric stat rolls
       if (t.indexOf('Pet Candy Used') !== -1) { out.push(hashStr(t)); continue; } // "(2/10) Pet Candy Used" — candied ≠ clean
       // gem slots: filled vs empty vs locked lives ONLY in the color codes
@@ -569,7 +573,48 @@
       return out;
     },
 
-    enabled: function () { return canDecode; }
+    enabled: function () { return canDecode; },
+
+    /* Look an item up by name in the sold-price table: today's average,
+       7-day average, sale rate — plus the cheapest live listing from the
+       last scan when one exists. */
+    priceCheck: function (query) {
+      var q = String(query || '').trim().toLowerCase();
+      if (q.length < 2) return [];
+      var today = Math.floor(Date.now() / DAY_MS);
+      var out = [];
+      var smp = this.data.samples;
+      for (var key in smp) {
+        var parts = key.split('|');
+        var name = parts[1] || key;
+        var pos = name.toLowerCase().indexOf(q);
+        if (pos === -1) continue;
+        var d = this.stats(key);
+        var s = smp[key];
+        var todayAvg = null, todayN = 0;
+        if (s.w) {
+          for (var i = 0; i < s.w.length; i++) {
+            if (s.w[i][0] === today) { todayAvg = Math.round(s.w[i][1] / s.w[i][2]); todayN = s.w[i][2]; }
+          }
+        }
+        var low = null, listed = 0;
+        if (lastGroups && lastGroups.has(key)) {
+          var g = lastGroups.get(key);
+          listed = g.listings.length;
+          for (var j = 0; j < listed; j++) { if (low == null || g.listings[j].p < low) low = g.listings[j].p; }
+        }
+        out.push({
+          key: key, kind: parts[0], name: name, parts: parts,
+          todayAvg: todayAvg, todayN: todayN,
+          weekAvg: d.weekAvg, weekN: d.weekN,
+          soldMedian: d.soldMedian, estDay: d.estDay,
+          lowestBin: low, listed: listed,
+          score: (pos === 0 ? 2 : 1) + Math.min(1, (d.weekN || 0) / 10)
+        });
+      }
+      out.sort(function (a, b) { return b.score - a.score || (b.weekN || 0) - (a.weekN || 0); });
+      return out.slice(0, 8);
+    }
   };
 
   /* ---------------- scan + flip building ---------------- */
@@ -817,7 +862,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 16,
+    version: 18,
     setNpcTable: function (map) { if (map && typeof map === 'object') NPC_BUY = map; },
     scan: scan,
     rebuild: rebuild,

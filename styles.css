@@ -212,6 +212,27 @@ select:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; bord
 .check { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
 .check input { accent-color: var(--gold); width: 15px; height: 15px; cursor: pointer; }
 
+/* ---------- price check ---------- */
+.pricecheck { margin-bottom: 16px; }
+.pc-hint { font-size: 13px; margin: 4px 0 10px; }
+.pc-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.6fr) repeat(4, 1fr);
+  gap: 10px; align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--border-soft);
+}
+.pc-row:last-child { border-bottom: 0; padding-bottom: 2px; }
+.pc-name { min-width: 0; display: flex; flex-direction: column; }
+.pc-cell { display: flex; flex-direction: column; min-width: 0; }
+.pc-l { color: var(--faint); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.6; }
+.pc-cell b { font: 600 14px/1.5 var(--font-num); }
+.pc-n { color: var(--faint); font-size: 11px; line-height: 1.5; font-family: var(--font-num); }
+@media (max-width: 900px) {
+  .pc-row { grid-template-columns: repeat(2, 1fr); gap: 8px 10px; }
+  .pc-name { grid-column: 1 / -1; }
+}
+
 /* ---------- settings ---------- */
 .settings {
   margin: 0 0 16px;
@@ -240,7 +261,9 @@ select:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; bord
 .settings > summary:hover { color: var(--text); }
 .settings[open] > summary { border-bottom: 1px solid var(--border-soft); color: var(--text); }
 .settings > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; border-radius: 12px; }
-.set-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px 26px; padding: 16px 18px 18px; }
+.set-grid { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 8px 26px; padding: 16px 18px 18px; }
+.ex-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; margin-bottom: 10px; }
+.ex-grid .check { font-size: 13px; padding: 3px 0; }
 .set-block { border: 0; margin: 0; padding: 0; min-width: 0; }
 .set-block legend {
   font: 600 11px/1.5 var(--font-ui);
@@ -431,6 +454,9 @@ p.set-hint { margin: 4px 0 14px; }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---------- responsive ---------- */
+@media (max-width: 1080px) {
+  .set-grid { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 940px) {
   .method-grid { grid-template-columns: 1fr; }
   .tool-selects { margin-left: 0; }
