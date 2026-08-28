@@ -706,6 +706,17 @@
         else if (opts.basis === 'sold' && d.soldMedian != null && cn + 1 === n) target = d.soldMedian;
         else { target = comp[0].p; basisUsed = 'undercut'; }
 
+        // a better-equipped same-name copy listed at or under our resale price
+        // dominates it — buyers browsing the name will take that one first
+        var dominated = false;
+        if (!anchor) {
+          var mySize = setOf(li).size;
+          for (var q = 0; q < n && L[q].p <= target; q++) {
+            if (q === li) continue;
+            if (setOf(q).size >= mySize && !alike(li, q)) { dominated = true; break; }
+          }
+        }
+
         var fee = feeRate(target);
         var profit = Math.floor(target * (1 - fee)) - buy.p;
         if (profit < 50000) continue;
@@ -763,6 +774,11 @@
           else if (target >= 5e7 && risk !== 'high') { risk = 'high'; why = 'expensive item without enough observed sales yet'; }
         }
 
+        if (dominated) {
+          risk = 'high';
+          why = 'a better-equipped copy is listed at or under your resale price — buyers will take that one';
+        }
+
         flips.push({
           key: key, lot: li, name: g.display, sub: g.sub, kind: g.kind, tier: g.tier,
           buy: buy.p, uuid: buy.uuid, sell: target, fee: fee, basis: basisUsed,
@@ -790,7 +806,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 14,
+    version: 15,
     scan: scan,
     rebuild: rebuild,
     setOptions: setOptions,
