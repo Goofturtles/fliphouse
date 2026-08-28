@@ -343,7 +343,7 @@
     var rk = rarKey(f.tier);
     var riskLabel = f.risk === 'low' ? 'solid' : f.risk === 'med' ? 'fair' : 'risky';
     var ladder = f.ladder.map(function (p, i) {
-      return '<span class="lad' + (i === f.lot ? ' snipe' : '') + '">' + fmt(p) + '</span>';
+      return '<span class="lad' + (i === 0 ? ' snipe' : '') + '">' + fmt(p) + '</span>';
     }).join('');
     var cmd = '/viewauction ' + f.uuid;
     var relist = fmt(Math.max(f.sell - 1, f.buy));
@@ -356,7 +356,7 @@
           '<span class="rar-dot bg-' + rk + '"></span>' +
           '<div class="iw">' +
             '<span class="iname r-' + rk + '">' + esc(f.name) + '</span>' +
-            '<span class="isub">' + esc(f.sub) + ' · ' + esc(String(f.tier).replace('_', ' ').toLowerCase()) + ' · ' + f.supply + ' listed' + lotTag + '</span>' +
+            '<span class="isub">' + esc(f.sub) + ' · ' + esc(String(f.tier).replace('_', ' ').toLowerCase()) + ' · ' + f.supply + ' alike' + lotTag + '</span>' +
           '</div>' +
         '</div>' +
         '<div class="c num"><span class="cl">Buy now</span><span class="cv">' + fmt(f.buy) + '</span></div>' +
@@ -371,7 +371,9 @@
       '</summary>' +
       '<div class="det"><div class="det-grid">' +
         '<div class="det-block"><h4>Price ladder</h4><div class="ladder">' + ladder + '</div>' +
-          '<p class="det-note">The ' + Math.min(f.supply, 8) + ' cheapest of ' + f.supply + ' BINs in this group · market median <b>' + fmt(f.median) + '</b>. You buy the gold one; the sell price is ' + basisNote + '.</p>' +
+          '<p class="det-note">Your buy plus the ' + Math.min(f.supply - 1, 7) + ' cheapest <b>matching</b> listings — lore-checked so enchants, dyes and upgrades line up' +
+            (f.groupSize > f.supply ? ' (' + (f.groupSize - f.supply) + ' same-name listings didn’t match and are ignored)' : '') +
+            ' · matching median <b>' + fmt(f.median) + '</b>. You buy the gold one; the sell price is ' + basisNote + '.</p>' +
           '<p class="det-note">' + demandNote(f) + '</p>' +
           (f.why ? '<p class="det-note"><b>Why ' + riskLabel + ':</b> ' + esc(f.why) + '.</p>' : '') + '</div>' +
         '<div class="det-block"><h4>How to buy</h4>' +

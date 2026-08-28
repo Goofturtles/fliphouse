@@ -177,6 +177,57 @@
     };
   }
 
+  /* ---------------- lore signatures (like-for-like matching) ----------------
+     Two listings under the same name can be wildly different items: enchants,
+     dyes, gems, drill upgrades, attributes. A flip only counts against listings
+     whose LORE genuinely matches. Stat lines are reduced to their stat name so
+     reforge/star rolls don't matter; enchant/ability/dye lines must match;
+     gem lines keep their color codes (filled vs empty slots differ). */
+
+  var GEM_RE = /[❁❈☘⸕✎✧❂✿]/;
+  var STAT_RE = /^([A-Za-z][A-Za-z '\-]{0,28}):\s*[+\-]?[\d.]/;
+  var ENCH_SEG = /^[A-Za-z][A-Za-z' \-]*\s[IVXLCDM]+$/;
+
+  function hashStr(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return h;
+  }
+
+  /* "Legion V, Growth V, Hecatomb X" / "Vampiric Vitality IV" / "Chimera I" */
+  function isEnchLine(t) {
+    var segs = t.split(', ');
+    for (var i = 0; i < segs.length; i++) {
+      if (!ENCH_SEG.test(segs[i].trim())) return false;
+    }
+    return segs.length > 0;
+  }
+
+  /* Only HIGH-SIGNAL lines make the signature. Ability paragraphs and flavor
+     text are identical boilerplate that would drown the few lines that carry
+     value; stat lines are downstream of enchants and full of reforge/star
+     noise. What identifies an item: its enchant set, its gem/dye glyph lines
+     (raw, so filled vs empty slots differ), and non-numeric "Key: value"
+     lines (Ability:, Held Item:, Upgrade Module:, …). */
+  function sigOf(rawLore) {
+    var lines = String(rawLore || '').split('\n');
+    var out = [];
+    for (var i = 0; i < lines.length; i++) {
+      var raw = lines[i];
+      var t = stripCodes(raw).trim();
+      if (!t) continue;
+      if (TIER_RE.test(t)) continue;          // rarity footer (incl. recomb noise)
+      if (t.charAt(0) === '▸') continue;      // pet XP progress
+      if (STAT_RE.test(t)) continue;          // numeric stat rolls
+      if (GEM_RE.test(raw)) { out.push(hashStr(raw)); continue; }
+      if (isEnchLine(t)) { out.push(hashStr(t)); continue; }
+      if (/^[A-Za-z ]+ Pet(, .+)?$/.test(t)) { out.push(hashStr(t)); continue; } // pet footer names the applied skin
+      var c = t.indexOf(': ');
+      if (c > 0) out.push(hashStr(t));        // Ability: / Held Item: / Upgrade Module: …
+    }
+    return out;
+  }
+
   function fetchJson(url) {
     return new Promise(function (resolve, reject) {
       var attempt = 0;
@@ -398,7 +449,7 @@
             g = { display: c.display, sub: c.sub, kind: c.kind, tier: c.tier, listings: [] };
             groups.set(c.key, g);
           }
-          g.listings.push({ p: a.starting_bid, uuid: a.uuid });
+          g.listings.push({ p: a.starting_bid, uuid: a.uuid, s: sigOf(a.item_lore) });
         }
       } catch (e) { /* one malformed page must not sink the scan */ }
     }
@@ -459,16 +510,36 @@
       if (n < minSupply) return; // need real market depth to price the resale
       L.sort(function (a, b) { return a.p - b.p; });
 
-      var median = (n % 2) ? L[(n - 1) / 2].p : Math.round((L[n / 2 - 1].p + L[n / 2].p) / 2);
+      var sets = new Array(n);
+      function setOf(i) { return sets[i] || (sets[i] = new Set(L[i].s || [])); }
+      function sim(i, j) {
+        var A = setOf(i), B = setOf(j);
+        if (!A.size && !B.size) return 1;
+        var inter = 0;
+        A.forEach(function (h) { if (B.has(h)) inter++; });
+        var union = A.size + B.size - inter;
+        return union ? inter / union : 1;
+      }
+
       var d = sales.stats(key);
 
       for (var li = 0; li < Math.min(maxLots, n - 1); li++) {
         var buy = L[li];
+
+        // resale evidence must come from listings that are actually the same item
+        var comp = [];
+        for (var j = li + 1; j < n && comp.length < 30; j++) {
+          if (sim(li, j) >= 0.7) comp.push(L[j]);
+        }
+        var cn = comp.length;
+        if (cn + 1 < minSupply) continue; // name twins exist, true twins don't
+
+        var median = (cn % 2) ? comp[(cn - 1) / 2].p : Math.round((comp[cn / 2 - 1].p + comp[cn / 2].p) / 2);
         var basisUsed = opts.basis;
         var target;
         if (opts.basis === 'median') target = median;
         else if (opts.basis === 'sold' && d.soldMedian != null) target = d.soldMedian;
-        else { target = L[li + 1].p; basisUsed = 'undercut'; }
+        else { target = comp[0].p; basisUsed = 'undercut'; }
 
         var fee = feeRate(target);
         var profit = Math.floor(target * (1 - fee)) - buy.p;
@@ -477,14 +548,14 @@
         if (roi < 0.03) continue;
         if (buy.p < 1000) continue;
 
-        // listings priced near the target = evidence the resale price is real
+        // comparable listings priced near the target = evidence the resale price is real
         var support = 0;
-        for (var j = li + 1; j < n; j++) { if (L[j].p <= target * 1.25) support++; }
+        for (var k2 = 0; k2 < cn; k2++) { if (comp[k2].p <= target * 1.25) support++; }
 
         var risk, why;
         if (roi > 3) { risk = 'high'; why = 'margin looks too good — usually hidden value explains the cheap price'; }
-        else if (support < 2) { risk = 'high'; why = 'almost no listings near the sell price'; }
-        else if (n >= 6 && support >= 3 && roi <= 1.5) { risk = 'low'; why = 'deep supply with several listings near the sell price'; }
+        else if (support < 2) { risk = 'high'; why = 'almost no matching listings near the sell price'; }
+        else if (cn + 1 >= 6 && support >= 3 && roi <= 1.5) { risk = 'low'; why = 'deep supply of matching listings near the sell price'; }
         else { risk = 'med'; why = 'moderate market depth'; }
 
         // real demand data trumps the shape of the order book
@@ -501,9 +572,10 @@
         flips.push({
           key: key, lot: li, name: g.display, sub: g.sub, kind: g.kind, tier: g.tier,
           buy: buy.p, uuid: buy.uuid, sell: target, fee: fee, basis: basisUsed,
-          profit: profit, roi: roi, supply: n, median: median, risk: risk, why: why,
+          profit: profit, roi: roi, supply: cn + 1, groupSize: n,
+          median: median, risk: risk, why: why,
           sold: d.sold, estDay: d.estDay, soldMedian: d.soldMedian,
-          ladder: L.slice(0, 8).map(function (x) { return x.p; })
+          ladder: [buy.p].concat(comp.slice(0, 7).map(function (x) { return x.p; }))
         });
       }
     });
