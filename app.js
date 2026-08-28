@@ -387,6 +387,7 @@
             (f.groupSize > f.supply ? ' (' + (f.groupSize - f.supply) + ' same-name listings didn’t match and are ignored)' : '') +
             ' · matching median <b>' + fmt(f.median) + '</b>. You buy the gold one; the sell price is ' + basisNote + '.</p>' +
           '<p class="det-note">' + demandNote(f) + '</p>' +
+          (f.recomb ? '<p class="det-note"><b>Recombobulated</b> — rarity was upgraded with a Recombobulator; fewer buyers want these, so expect a slower sale.</p>' : '') +
           (f.why ? '<p class="det-note"><b>Why ' + riskLabel + ':</b> ' + esc(f.why) + '.</p>' : '') + '</div>' +
         '<div class="det-block"><h4>How to buy</h4>' +
           '<div class="cmd-row"><code class="cmd">' + esc(cmd) + '</code>' +

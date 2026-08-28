@@ -210,7 +210,7 @@
      "Growth V, Protection V" piece IS a clean piece. Only names on this list
      get dropped; anything unknown (attributes, ultimates, progress enchants)
      stays significant, and level VI+ always counts. */
-  var WORTHLESS_ENCH = {};
+  var WORTHLESS_ENCH = Object.create(null);
   ['Growth', 'Protection', 'Blast Protection', 'Fire Protection', 'Projectile Protection',
    'Sharpness', 'Smite', 'Bane of Arthropods', 'Critical', 'Cleave', 'Giant Killer',
    'Cubism', 'Execute', 'Impaling', 'Lethality', 'Life Steal', 'Looting', 'Luck',
@@ -763,7 +763,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 11,
+    version: 12,
     scan: scan,
     rebuild: rebuild,
     setOptions: setOptions,
