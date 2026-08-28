@@ -144,7 +144,8 @@
       c.flips.every(function (f) {
         return f && Array.isArray(f.ladder) && typeof f.buy === 'number' &&
           typeof f.profit === 'number' && typeof f.roi === 'number' &&
-          typeof f.risk === 'string' && typeof f.name === 'string';
+          typeof f.risk === 'string' && typeof f.name === 'string' &&
+          typeof f.supply === 'number';
       }));
   }
 

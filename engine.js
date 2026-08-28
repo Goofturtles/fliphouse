@@ -526,7 +526,8 @@
       for (var li = 0; li < Math.min(maxLots, n - 1); li++) {
         var buy = L[li];
 
-        // resale evidence must come from listings that are actually the same item
+        // resale evidence must come from listings that are actually the same
+        // item, and only from ones still on sale after you buy this lot
         var comp = [];
         for (var j = li + 1; j < n && comp.length < 30; j++) {
           if (sim(li, j) >= 0.7) comp.push(L[j]);
@@ -538,7 +539,9 @@
         var basisUsed = opts.basis;
         var target;
         if (opts.basis === 'median') target = median;
-        else if (opts.basis === 'sold' && d.soldMedian != null) target = d.soldMedian;
+        // sold prices are tracked per name, so only trust them when every
+        // same-name listing is a true lore twin (no mixed variants)
+        else if (opts.basis === 'sold' && d.soldMedian != null && cn + 1 === n) target = d.soldMedian;
         else { target = comp[0].p; basisUsed = 'undercut'; }
 
         var fee = feeRate(target);
