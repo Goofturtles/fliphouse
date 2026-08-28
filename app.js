@@ -467,6 +467,7 @@
     els.retryBtn.hidden = true;
     els.scanLabel.classList.remove('err');
     els.scanTrack.hidden = false;
+    els.scanFill.classList.toggle('live', mode === 'progress');
     if (mode === 'progress') {
       var pct = Math.round((a / Math.max(b, 1)) * 100);
       // the label is a live region — update it in coarse steps, not 46 times
