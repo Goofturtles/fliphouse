@@ -357,12 +357,15 @@
         var d = JSON.parse(localStorage.getItem(LS_SALES));
         if (d && d.v === 1 && d.samples && typeof d.coveredMs === 'number') {
           var cutoff = Date.now() - DAY_MS;
+          var today0 = Math.floor(Date.now() / DAY_MS);
           var fresh = false;
           for (var k in d.samples) {
-            if (d.samples[k].t < cutoff) delete d.samples[k];
-            else fresh = true;
+            var e = d.samples[k];
+            var hasWeek = e.w && e.w.some(function (b) { return b[0] > today0 - 7; });
+            if (e.t < cutoff && !hasWeek) { delete d.samples[k]; continue; }
+            fresh = true;
           }
-          // a table with nothing from the last 24h is dead weight — start clean
+          // a table with nothing useful left is dead weight — start clean
           this.data = fresh ? d : freshSales();
         }
       } catch (e) { /* fresh start */ }
@@ -454,6 +457,7 @@
           var moreCoverage = remote.coveredMs > self.data.coveredMs;
           var fresher = (remote.lastWindow || 0) > self.data.lastWindow;
           if (!moreCoverage && !fresher) return false;
+          var localSmp = self.data.samples;
           self.data = {
             v: 1,
             start: typeof remote.start === 'number' ? remote.start : Date.now(),
@@ -461,6 +465,15 @@
             lastWindow: remote.lastWindow || 0,
             samples: remote.samples
           };
+          // local week history survives adoption — keep the richer bucket set per key
+          var sumN = function (w) { var n = 0; for (var i = 0; i < w.length; i++) n += w[i][2]; return n; };
+          for (var lk in localSmp) {
+            var lw = localSmp[lk].w;
+            if (!lw || !lw.length) continue;
+            var rs = self.data.samples[lk];
+            if (!rs) self.data.samples[lk] = { c: 0, ps: [], t: localSmp[lk].t, w: lw };
+            else if (!rs.w || sumN(rs.w) < sumN(lw)) rs.w = lw;
+          }
           self.save();
           return true;
         })
@@ -470,21 +483,24 @@
     stats: function (key) {
       var cov = this.data.coveredMs;
       var s = this.data.samples[key];
-      var out = { sold: s ? Math.floor(s.c) : 0, estDay: null, soldMedian: null, weekAvg: null, weekN: 0, coverageMs: cov };
+      // a key can live on week history alone — its 24h fields are stale then
+      // and must not pose as fresh evidence (or mute the never-sells signal)
+      var live = !!(s && Date.now() - s.t <= DAY_MS);
+      var out = { sold: live ? Math.floor(s.c) : 0, estDay: null, soldMedian: null, weekAvg: null, weekN: 0, coverageMs: cov };
       if (s && s.w && s.w.length) {
         var tot = 0, wn = 0;
         for (var wi = 0; wi < s.w.length; wi++) { tot += s.w[wi][1]; wn += s.w[wi][2]; }
-        if (wn >= 3) { out.weekAvg = Math.round(tot / wn); out.weekN = wn; }
+        if (wn >= 5) { out.weekAvg = Math.round(tot / wn); out.weekN = wn; }
       }
-      if (s && s.ps.length >= 2) {
+      if (live && s.ps.length >= 2) {
         var ps = s.ps.slice().sort(function (a, b) { return a - b; });
         out.soldMedian = (ps.length % 2) ? ps[(ps.length - 1) / 2]
           : Math.round((ps[ps.length / 2 - 1] + ps[ps.length / 2]) / 2);
       }
       // A rate needs real evidence: one lucky sale in a tiny window extrapolates
       // to nonsense, and "no sales" only means something after a long watch.
-      if (cov >= 5 * 60000 && s && s.c >= 2) out.estDay = Math.min(s.c * DAY_MS / cov, 960);
-      else if (cov >= 45 * 60000 && !s) out.estDay = 0;
+      if (cov >= 5 * 60000 && live && s.c >= 2) out.estDay = Math.min(s.c * DAY_MS / cov, 960);
+      else if (cov >= 45 * 60000 && !live) out.estDay = 0;
       return out;
     },
 
@@ -696,7 +712,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 9,
+    version: 10,
     scan: scan,
     rebuild: rebuild,
     setOptions: setOptions,

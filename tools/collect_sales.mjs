@@ -24,8 +24,12 @@ if (existsSync(file)) {
     if (d && d.v === 1 && d.samples && typeof d.coveredMs === 'number') sales.data = d;
   } catch { /* fresh table */ }
 }
+const today = Math.floor(now / DAY);
 for (const k of Object.keys(sales.data.samples)) {
-  if (now - sales.data.samples[k].t > DAY) delete sales.data.samples[k];
+  const s = sales.data.samples[k];
+  const hasWeek = s.w && s.w.some((b) => b[0] > today - 7);
+  if (now - s.t > DAY && !hasWeek) { delete sales.data.samples[k]; continue; }
+  if (s.w) s.w = s.w.filter((b) => b[0] > today - 7);
 }
 
 const POLLS = Number(process.env.POLLS || 6);
