@@ -104,14 +104,14 @@
     return { name: name, stars: stars };
   }
 
+  /* Sub-90 pets trade at roughly the same price — splitting them only starves
+     groups of comparables and sold data. Level premium starts at 90. */
   function petBucket(lvl) {
     if (lvl >= 200) return '200';
     if (lvl > 100) return '101-199';
     if (lvl === 100) return '100';
     if (lvl >= 90) return '90-99';
-    if (lvl >= 70) return '70-89';
-    if (lvl >= 40) return '40-69';
-    return '1-39';
+    return '1-89';
   }
 
   function firstLoreLine(lore) {
@@ -862,7 +862,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 18,
+    version: 19,
     setNpcTable: function (map) { if (map && typeof map === 'object') NPC_BUY = map; },
     scan: scan,
     rebuild: rebuild,

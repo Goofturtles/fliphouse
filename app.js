@@ -82,6 +82,13 @@
   }
   function fmtPct(x) { return Math.round(x * 100) + '%'; }
 
+  /* Best-flip score ≈ coins/day: profit × how fast it sells (capped at a
+     realistic 10 resales/day), discounted when the evidence is thinner. */
+  function flipScore(f) {
+    var rate = f.estDay != null ? f.estDay : 2;
+    return f.profit * Math.min(rate, 10) * (f.risk === 'low' ? 1 : 0.75);
+  }
+
   function fmtRate(estDay) {
     if (estDay == null) return '—';
     if (estDay === 0) return '0/d';
@@ -178,6 +185,7 @@
   function visibleFlips(base) {
     var list = state.budget == null ? base.slice() : base.filter(function (f) { return f.buy <= state.budget; });
     switch (state.sort) {
+      case 'best': list.sort(function (a, b) { return flipScore(b) - flipScore(a); }); break;
       case 'roi': list.sort(function (a, b) { return b.roi - a.roi; }); break;
       case 'cheap': list.sort(function (a, b) { return a.buy - b.buy; }); break;
       case 'supply': list.sort(function (a, b) { return b.supply - a.supply; }); break;
@@ -305,7 +313,7 @@
       if (f.risk === 'high') return false;
       if (f.estDay != null && f.estDay < 1) return false; // slower than ~1 sale/day
       return true;
-    }).slice().sort(function (a, b) { return b.profit - a.profit; });
+    }).slice().sort(function (a, b) { return flipScore(b) - flipScore(a); });
     var left = state.budget, picks = [];
     for (var i = 0; i < pool.length && picks.length < 6; i++) {
       if (pool[i].buy <= left) { picks.push(pool[i]); left -= pool[i].buy; }
@@ -552,7 +560,8 @@
       minProfit: state.minProfit, hideRisky: state.hideRisky,
       basis: eng.basis, lots: eng.lots, minSupply: eng.minSupply,
       autoRescan: state.autoRescan,
-      ex: state.ex, minRoi: state.minRoi, minRate: state.minRate
+      ex: state.ex, minRoi: state.minRoi, minRate: state.minRate,
+      sortV2: true
     });
   }
 
@@ -681,6 +690,8 @@
     if (typeof prefs.budget === 'number' || prefs.budget === null) state.budget = prefs.budget;
     if (typeof prefs.cat === 'string') state.cat = prefs.cat;
     if (typeof prefs.sort === 'string') state.sort = prefs.sort;
+    // one-time migration: 'profit' was the old default — 'best' finds more money
+    if (state.sort === 'profit' && !prefs.sortV2) state.sort = 'best';
     if (typeof prefs.minProfit === 'number') state.minProfit = prefs.minProfit;
     if (typeof prefs.hideRisky === 'boolean') state.hideRisky = prefs.hideRisky;
     if (typeof prefs.autoRescan === 'boolean') state.autoRescan = prefs.autoRescan;
@@ -699,7 +710,7 @@
   els.minSupplySel.value = String(eng.minSupply);
   els.autoRescanChk.checked = state.autoRescan;
   els.sortSel.value = state.sort;
-  if (!els.sortSel.value) { state.sort = 'profit'; els.sortSel.value = 'profit'; }
+  if (!els.sortSel.value) { state.sort = 'best'; els.sortSel.value = 'best'; }
   els.minProfitSel.value = String(state.minProfit);
   if (!els.minProfitSel.value) { state.minProfit = 100000; els.minProfitSel.value = '100000'; }
   els.hideRisky.checked = state.hideRisky;
