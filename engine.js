@@ -102,7 +102,8 @@
   }
 
   function petBucket(lvl) {
-    if (lvl > 100) return '100+';
+    if (lvl >= 200) return '200';
+    if (lvl > 100) return '101-199';
     if (lvl === 100) return '100';
     if (lvl >= 90) return '90-99';
     if (lvl >= 70) return '70-89';
@@ -220,10 +221,17 @@
       if (t.charAt(0) === '▸') continue;      // pet XP progress
       if (STAT_RE.test(t)) continue;          // numeric stat rolls
       if (GEM_RE.test(raw)) { out.push(hashStr(raw)); continue; }
-      if (isEnchLine(t)) { out.push(hashStr(t)); continue; }
+      var tl = t.replace(/,\s*$/, ''); // wrapped enchant lists end mid-list with a comma
+      if (isEnchLine(tl)) {
+        // one token PER enchant, so "Growth V, Protection V" and a wrapped or
+        // reordered list of the same enchants produce identical tokens
+        var segs = tl.split(', ');
+        for (var s2 = 0; s2 < segs.length; s2++) out.push(hashStr(segs[s2].trim()));
+        continue;
+      }
       if (/^[A-Za-z ]+ Pet(, .+)?$/.test(t)) { out.push(hashStr(t)); continue; } // pet footer names the applied skin
       var c = t.indexOf(': ');
-      if (c > 0) out.push(hashStr(t));        // Ability: / Held Item: / Upgrade Module: …
+      if (c > 0) out.push(hashStr(t));        // Ability: / Held Item: / Color: / Upgrade Module: …
     }
     return out;
   }
@@ -512,13 +520,16 @@
 
       var sets = new Array(n);
       function setOf(i) { return sets[i] || (sets[i] = new Set(L[i].s || [])); }
-      function sim(i, j) {
+      /* Comparable = at most ONE lore token differs in either direction.
+         Boilerplate is identical on every copy so it can never pad the score;
+         an extra enchant, filled gem, held item or exotic color always lands
+         in the difference — a clean copy never matches a maxed one. */
+      function alike(i, j) {
         var A = setOf(i), B = setOf(j);
-        if (!A.size && !B.size) return 1;
-        var inter = 0;
-        A.forEach(function (h) { if (B.has(h)) inter++; });
-        var union = A.size + B.size - inter;
-        return union ? inter / union : 1;
+        var diff = 0;
+        A.forEach(function (h) { if (!B.has(h)) diff++; });
+        B.forEach(function (h) { if (!A.has(h)) diff++; });
+        return diff <= 1;
       }
 
       var d = sales.stats(key);
@@ -530,7 +541,7 @@
         // item, and only from ones still on sale after you buy this lot
         var comp = [];
         for (var j = li + 1; j < n && comp.length < 30; j++) {
-          if (sim(li, j) >= 0.7) comp.push(L[j]);
+          if (alike(li, j)) comp.push(L[j]);
         }
         var cn = comp.length;
         if (cn + 1 < minSupply) continue; // name twins exist, true twins don't
@@ -551,25 +562,44 @@
         if (roi < 0.03) continue;
         if (buy.p < 1000) continue;
 
-        // comparable listings priced near the target = evidence the resale price is real
-        var support = 0;
-        for (var k2 = 0; k2 < cn; k2++) { if (comp[k2].p <= target * 1.25) support++; }
+        /* ---- risk: sold prices are truth, asks are wishes ----
+           Default-visible flips need EITHER real sold prices backing the resale
+           (and a buy clearly below what the item actually sells for), OR a
+           tight, deep ask ladder. Everything else is speculation → risky. */
+        var nearT = 0;
+        for (var k2 = 0; k2 < cn; k2++) { if (comp[k2].p <= target * 1.2) nearT++; }
 
         var risk, why;
-        if (roi > 3) { risk = 'high'; why = 'margin looks too good — usually hidden value explains the cheap price'; }
-        else if (support < 2) { risk = 'high'; why = 'almost no matching listings near the sell price'; }
-        else if (cn + 1 >= 6 && support >= 3 && roi <= 1.5) { risk = 'low'; why = 'deep supply of matching listings near the sell price'; }
-        else { risk = 'med'; why = 'moderate market depth'; }
+        if (roi > 3) {
+          risk = 'high'; why = 'margin looks too good — usually hidden value explains the cheap price';
+        } else if (d.soldMedian != null && buy.p >= d.soldMedian) {
+          risk = 'high'; why = 'recent buyers paid less than this buy price — no real edge';
+        } else if (d.soldMedian != null && target > d.soldMedian * 1.4) {
+          risk = 'high'; why = 'sellers are asking way above what this item actually sells for';
+        } else if (d.soldMedian != null) {
+          // corroborated: buyers really pay around this price, and the buy is under it
+          risk = (buy.p <= d.soldMedian * 0.85 && cn + 1 >= 4 && nearT >= 2) ? 'low' : 'med';
+          why = risk === 'low' ? 'real sold prices back this resale, with a real margin under them'
+            : 'sold prices back the resale, but the edge or supply is thin';
+        } else {
+          // No real sold prices yet. Asks alone cannot verify a flip — even a
+          // tight ask cluster is often sellers herding at a fantasy price
+          // (15m-listed cloaks that actually trade at 2m). Unverified = hidden.
+          risk = 'high';
+          why = median > target * 1.8
+            ? 'asks on this item are wildly scattered — no reliable resale price'
+            : 'no real sales observed yet to verify this price — leave the tab open and it may confirm';
+        }
 
-        // real demand data trumps the shape of the order book
+        // demand-rate adjustments from watching real sales
         if (d.estDay != null) {
           if (d.estDay < 0.5) { risk = 'high'; why = 'we watched the AH and this basically never sells'; }
           else if (d.estDay < 2 && risk === 'low') { risk = 'med'; why = 'sells, but slowly — under 2 a day'; }
           else if (d.estDay >= 10 && risk !== 'high') { why = 'sells fast — ' + Math.round(d.estDay) + ' a day observed'; }
-        } else if (d.sold === 0) {
-          // zero sales evidence — price-aware prior: nobody impulse-buys a 400m item
+        } else if (d.soldMedian == null) {
+          // no real sold PRICES — price-aware prior: nobody impulse-buys a 400m item
           if (target >= 2e8) { risk = 'high'; why = 'price this high needs proof buyers exist — none observed yet'; }
-          else if (target >= 5e7 && risk === 'low') { risk = 'med'; why = 'expensive item with no observed sales yet'; }
+          else if (target >= 5e7 && risk !== 'high') { risk = 'high'; why = 'expensive item without enough observed sales yet'; }
         }
 
         flips.push({

@@ -305,16 +305,24 @@
       return;
     }
     if (!visible.length) {
+      var d = state.meta.demand;
+      var warming = d && d.tracking && d.coverageMs < 10 * 60000;
       els.resultCount.textContent = '0 flips match';
-      els.flipList.innerHTML = '<div class="empty"><b>No flips match these filters.</b><br>' +
-        (hiddenRisky > 0 ? hiddenRisky + ' risky flips are hidden — untick “Hide risky” to see them. ' : '') +
-        'Try a wider budget or a lower min profit.</div>';
+      els.flipList.innerHTML = '<div class="empty">' + (warming
+        ? '<b>Verifying flips against real sales…</b><br>Every flip must be backed by prices buyers actually paid. Leave the tab open — sales are sampled every minute and verified flips appear as the data comes in.' +
+          (hiddenRisky > 0 ? '<br>' + hiddenRisky + ' unverified flips are hidden — untick “Hide risky” to gamble on them.' : '')
+        : '<b>No flips match these filters.</b><br>' +
+          (hiddenRisky > 0 ? hiddenRisky + ' risky flips are hidden — untick “Hide risky” to see them. ' : '') +
+          'Try a wider budget or a lower min profit.') + '</div>';
       els.showMoreBtn.hidden = true;
       return;
     }
 
     var cap = state.showAll ? visible.length : Math.min(RENDER_CAP, visible.length);
-    els.resultCount.textContent = 'Showing ' + cap + ' of ' + visible.length + ' flips' +
+    var ageMins = Math.floor((Date.now() - state.meta.scannedAt) / 60000);
+    els.resultCount.textContent =
+      (ageMins >= 3 ? '⚠ Scan is ' + ageMins + 'm old — listings change every second, rescan before buying · ' : '') +
+      'Showing ' + cap + ' of ' + visible.length + ' flips' +
       (hiddenRisky > 0 ? ' · ' + hiddenRisky + ' risky hidden' : '') + coverageNote();
 
     var html = [];
@@ -380,7 +388,7 @@
         '<div class="det-block"><h4>How to buy</h4>' +
           '<div class="cmd-row"><code class="cmd">' + esc(cmd) + '</code>' +
           '<button type="button" class="btn copy-cmd" data-cmd="' + esc(cmd) + '">Copy</button></div>' +
-          '<p class="det-note">Paste in chat → buy for <b>' + fmt(f.buy) + '</b> → relist around <b>' + relist + '</b> → clear <b>+' + fmt(f.profit) + '</b> after the ' + (f.fee * 100) + '% tax. Double-check the lore before buying.</p></div>' +
+          '<p class="det-note">Paste in chat → buy for <b>' + fmt(f.buy) + '</b> → relist around <b>' + relist + '</b> → clear <b>+' + fmt(f.profit) + '</b> after the ' + (f.fee * 100) + '% tax. Check the lore and the live price in game first — new listings appear every second, so a cheaper copy may exist by now.</p></div>' +
       '</div></div>' +
     '</details>';
   }
