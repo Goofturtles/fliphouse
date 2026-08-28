@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fliphouse — Skyblock AH Flips</title>
+  <meta name="description" content="Live Hypixel Skyblock auction house flip finder. Scans every BIN auction, finds underpriced items, and shows profit after tax — filtered to your budget.">
+  <meta name="theme-color" content="#0b0d10">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23f6c454'/%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23a97b17' stroke-width='2'/%3E%3Ctext x='16' y='21.5' font-size='15' font-family='Georgia' font-weight='bold' text-anchor='middle' fill='%23845e0d'%3E%E2%9B%83%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="./">
+      <svg class="coin" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="13" fill="#f6c454"/>
+        <circle cx="16" cy="16" r="13" fill="none" stroke="#a97b17" stroke-width="2.5"/>
+        <path d="M16 8.5l2 5 5.5.4-4.2 3.6 1.3 5.4L16 20l-4.6 2.9 1.3-5.4-4.2-3.6 5.5-.4z" fill="#a97b17"/>
+      </svg>
+      <span class="brand-name">Fliphouse</span>
+      <span class="brand-sub">Skyblock AH flips</span>
+    </a>
+    <div class="top-actions">
+      <span id="dataAge" class="data-age"></span>
+      <button id="rescanBtn" class="btn btn-gold" type="button">Rescan</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <p class="eyebrow">Hypixel Skyblock · Auction House</p>
+    <h1>Find the flip.<br><em>Keep the margin.</em></h1>
+    <p class="sub">Fliphouse scans every Buy-It-Now auction live, spots items listed way under
+    the going rate, and tells you what to buy, what to relist it for, and what you clear after tax.</p>
+    <div id="scanPanel" class="scan-panel" hidden>
+      <div class="scan-row">
+        <span id="scanLabel" role="status">Scanning the auction house…</span>
+        <button id="retryBtn" class="btn btn-gold" type="button" hidden>Retry scan</button>
+      </div>
+      <div class="scan-track" id="scanTrack" role="progressbar" aria-label="Scan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="scan-fill" id="scanFill"></div></div>
+    </div>
+  </section>
+
+  <section class="stats" id="stats" aria-label="Scan summary">
+    <div class="stat"><span class="stat-v" id="stAuctions">—</span><span class="stat-l">auctions scanned</span></div>
+    <div class="stat"><span class="stat-v" id="stBins">—</span><span class="stat-l">BIN listings</span></div>
+    <div class="stat"><span class="stat-v" id="stFlips">—</span><span class="stat-l">flips found</span></div>
+    <div class="stat"><span class="stat-v good" id="stBest">—</span><span class="stat-l">best margin</span></div>
+  </section>
+
+  <section class="card budget" aria-label="Budget">
+    <div class="budget-head">
+      <h2>Your budget</h2>
+      <p class="muted">What's in your purse? We only show flips you can actually afford — and build you a shopping list.</p>
+    </div>
+    <div class="budget-chips" id="budgetChips" role="group" aria-label="Budget presets"></div>
+    <div class="budget-custom">
+      <label class="muted" for="budgetInput">Custom:</label>
+      <input id="budgetInput" placeholder="e.g. 25m or 750k" autocomplete="off" spellcheck="false">
+      <button id="budgetApply" class="btn" type="button">Set</button>
+    </div>
+    <div id="planPanel" class="plan"></div>
+  </section>
+
+  <section class="toolbar" aria-label="Filters">
+    <input id="searchInput" class="search" type="search" placeholder="Search items…" aria-label="Search items" autocomplete="off">
+    <div class="chips" id="catChips" role="group" aria-label="Category"></div>
+    <div class="tool-selects">
+      <label class="sel-wrap"><span class="sel-label">Sort</span>
+        <select id="sortSel">
+          <option value="profit">Highest profit</option>
+          <option value="roi">Highest ROI</option>
+          <option value="demand">Fastest sellers</option>
+          <option value="cheap">Cheapest first</option>
+          <option value="supply">Most supply</option>
+        </select>
+      </label>
+      <label class="sel-wrap"><span class="sel-label">Min profit</span>
+        <select id="minProfitSel">
+          <option value="50000">50k</option>
+          <option value="100000" selected>100k</option>
+          <option value="250000">250k</option>
+          <option value="1000000">1m</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="hideRisky" checked> Hide risky</label>
+    </div>
+  </section>
+
+  <details class="settings" id="settingsPanel">
+    <summary>Settings</summary>
+    <div class="set-grid">
+      <fieldset class="set-block">
+        <legend>Resale price basis</legend>
+        <label class="set-radio"><input type="radio" name="basis" value="undercut" checked>
+          <span><b>Undercut next BIN</b><span class="set-hint">fast flip — price just under the second-cheapest listing</span></span></label>
+        <label class="set-radio"><input type="radio" name="basis" value="median">
+          <span><b>Market median</b><span class="set-hint">patient sell at the middle of the market</span></span></label>
+        <label class="set-radio"><input type="radio" name="basis" value="sold">
+          <span><b>Recent sold price</b><span class="set-hint">what buyers actually paid — needs demand data, falls back to undercut</span></span></label>
+      </fieldset>
+      <div class="set-block">
+        <label class="set-row" for="lotsSel"><span>Lots per item</span>
+          <select id="lotsSel" aria-describedby="lotsHint">
+            <option value="1" selected>Only lowest BIN</option>
+            <option value="2">2 cheapest lots</option>
+            <option value="3">3 cheapest lots</option>
+          </select></label>
+        <p class="set-hint" id="lotsHint">More lots also surfaces the 2nd/3rd-cheapest listing of an item when it's still profitable — more to buy per scan.</p>
+        <label class="set-row" for="minSupplySel"><span>Min supply</span>
+          <select id="minSupplySel" aria-describedby="supplyHint">
+            <option value="3" selected>3 listings</option>
+            <option value="4">4 listings</option>
+            <option value="6">6 listings</option>
+          </select></label>
+        <p class="set-hint" id="supplyHint">Higher = safer price evidence, fewer flips.</p>
+        <label class="check set-check"><input type="checkbox" id="autoRescanChk"> Auto-rescan every 2.5 min</label>
+      </div>
+    </div>
+  </details>
+
+  <section class="results" aria-label="Flips">
+    <p class="result-count" id="resultCount"></p>
+    <div class="thead rgrid" aria-hidden="true">
+      <div class="c-item">Item</div>
+      <div class="c num">Buy now</div>
+      <div class="c num">Sell at</div>
+      <div class="c num">Profit</div>
+      <div class="c num">ROI</div>
+      <div class="c num">Sells/day</div>
+      <div class="c">Risk</div>
+      <div class="c"></div>
+    </div>
+    <div id="flipList" tabindex="-1"></div>
+    <div class="list-foot">
+      <button id="showMoreBtn" class="btn" type="button" hidden>Show all</button>
+    </div>
+  </section>
+
+  <section class="method" aria-label="How it works">
+    <h2>How the numbers work</h2>
+    <div class="method-grid">
+      <div class="card m-card">
+        <h3>Finding flips</h3>
+        <p>Every item is grouped with its market twins — reforges stripped, stars bucketed, pets
+        bucketed by level, enchanted books matched by enchant. If the cheapest BIN sits clearly under
+        the next one, that gap is your flip. Sells/day comes from real sales: every minute the site
+        samples what actually sold on the AH, so demand numbers sharpen the longer you keep it open.</p>
+      </div>
+      <div class="card m-card">
+        <h3>Tax is already deducted</h3>
+        <p>Profit shown is <em>after</em> the auction house claiming tax:
+        1% under 10m, 2% from 10m to 100m, 2.5% above. What you see is what lands in your purse.</p>
+      </div>
+      <div class="card m-card">
+        <h3>Risk badges</h3>
+        <p><span class="badge b-low">solid</span> deep supply and several listings near your resale price.
+        <span class="badge b-med">fair</span> decent evidence, smaller market.
+        <span class="badge b-high">risky</span> thin support or a margin that looks too good —
+        often hidden value (enchants, attributes) explains the "cheap" price. Check the lore first.</p>
+      </div>
+    </div>
+    <p class="fineprint">Prices move fast — a flip can be bought seconds after a scan, so rescan before you buy.
+    Data comes straight from the public Hypixel API. Not affiliated with Hypixel.</p>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>Fliphouse</span>
+    <span class="muted">Live data · api.hypixel.net</span>
+  </div>
+</footer>
+
+<div id="toast" role="status"></div>
+
+<noscript><p style="text-align:center;padding:40px;color:#e8ecf1;background:#0b0d10">Fliphouse needs JavaScript to scan the auction house.</p></noscript>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
