@@ -440,7 +440,11 @@
         .then(function (remote) {
           if (!remote || remote.v !== 1 || !remote.samples ||
               typeof remote.coveredMs !== 'number') return false;
-          if (remote.coveredMs <= self.data.coveredMs) return false;
+          // adopt when the remote knows more — or, at equal (saturated)
+          // coverage, when it is simply FRESHER than what we stored last visit
+          var moreCoverage = remote.coveredMs > self.data.coveredMs;
+          var fresher = (remote.lastWindow || 0) > self.data.lastWindow;
+          if (!moreCoverage && !fresher) return false;
           self.data = {
             v: 1,
             start: typeof remote.start === 'number' ? remote.start : Date.now(),
@@ -457,7 +461,7 @@
     stats: function (key) {
       var cov = this.data.coveredMs;
       var s = this.data.samples[key];
-      var out = { sold: s ? Math.round(s.c) : 0, estDay: null, soldMedian: null, coverageMs: cov };
+      var out = { sold: s ? Math.floor(s.c) : 0, estDay: null, soldMedian: null, coverageMs: cov };
       if (s && s.ps.length >= 2) {
         var ps = s.ps.slice().sort(function (a, b) { return a - b; });
         out.soldMedian = (ps.length % 2) ? ps[(ps.length - 1) / 2]
