@@ -220,6 +220,7 @@
       if (TIER_RE.test(t)) continue;          // rarity footer (incl. recomb noise)
       if (t.charAt(0) === '▸') continue;      // pet XP progress
       if (STAT_RE.test(t)) continue;          // numeric stat rolls
+      if (t.indexOf('Pet Candy Used') !== -1) { out.push(hashStr(t)); continue; } // "(2/10) Pet Candy Used" — candied ≠ clean
       if (GEM_RE.test(raw)) { out.push(hashStr(raw)); continue; }
       var tl = t.replace(/,\s*$/, ''); // wrapped enchant lists end mid-list with a comma
       if (isEnchLine(tl)) {
@@ -354,9 +355,15 @@
     load: function () {
       try {
         var d = JSON.parse(localStorage.getItem(LS_SALES));
-        if (d && d.v === 1 && d.samples && typeof d.coveredMs === 'number' &&
-            Date.now() - d.start < DAY_MS) {
-          this.data = d;
+        if (d && d.v === 1 && d.samples && typeof d.coveredMs === 'number') {
+          var cutoff = Date.now() - DAY_MS;
+          var fresh = false;
+          for (var k in d.samples) {
+            if (d.samples[k].t < cutoff) delete d.samples[k];
+            else fresh = true;
+          }
+          // a table with nothing from the last 24h is dead weight — start clean
+          this.data = fresh ? d : freshSales();
         }
       } catch (e) { /* fresh start */ }
     },
@@ -371,8 +378,6 @@
       if (!canDecode) return Promise.resolve(false);
       return fetchJson(API_ENDED).then(function (json) {
         if (!json.lastUpdated || json.lastUpdated <= self.data.lastWindow) return false;
-        // rolling reset so a long-lived tab can't inflate rates forever
-        if (Date.now() - self.data.start >= DAY_MS) self.data = freshSales();
         var list = json.auctions || [];
         var jobs = list.map(function (a) {
           // Promise.resolve first so a sync throw (bad base64) hits the catch below
@@ -394,7 +399,20 @@
         });
         return Promise.all(jobs).then(function () {
           self.data.lastWindow = json.lastUpdated;
-          self.data.coveredMs = Math.min(self.data.coveredMs + 60000, DAY_MS);
+          if (self.data.coveredMs >= DAY_MS) {
+            // sliding 24h window: each new minute decays the old ones out, so
+            // counts and coverage stay proportional forever — no resets needed
+            var decay = (DAY_MS - 60000) / DAY_MS;
+            var smp = self.data.samples;
+            for (var dk in smp) smp[dk].c *= decay;
+          } else {
+            self.data.coveredMs = Math.min(self.data.coveredMs + 60000, DAY_MS);
+          }
+          var cutoff = Date.now() - DAY_MS;
+          var smp2 = self.data.samples;
+          for (var pk in smp2) {
+            if (smp2[pk].t < cutoff || smp2[pk].c < 0.05) delete smp2[pk];
+          }
           self.prune();
           self.save();
           return true;
@@ -412,10 +430,34 @@
 
     coverageMs: function () { return this.data.coveredMs; },
 
+    /* Adopt a server-collected sales table (published by the repo's cron
+       collector) when it has more coverage than what this browser has seen.
+       Local polling then keeps extending it. */
+    bootstrap: function (url) {
+      var self = this;
+      return fetch(url, { cache: 'no-cache' })
+        .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+        .then(function (remote) {
+          if (!remote || remote.v !== 1 || !remote.samples ||
+              typeof remote.coveredMs !== 'number') return false;
+          if (remote.coveredMs <= self.data.coveredMs) return false;
+          self.data = {
+            v: 1,
+            start: typeof remote.start === 'number' ? remote.start : Date.now(),
+            coveredMs: Math.min(remote.coveredMs, DAY_MS),
+            lastWindow: remote.lastWindow || 0,
+            samples: remote.samples
+          };
+          self.save();
+          return true;
+        })
+        .catch(function () { return false; });
+    },
+
     stats: function (key) {
       var cov = this.data.coveredMs;
       var s = this.data.samples[key];
-      var out = { sold: s ? s.c : 0, estDay: null, soldMedian: null, coverageMs: cov };
+      var out = { sold: s ? Math.round(s.c) : 0, estDay: null, soldMedian: null, coverageMs: cov };
       if (s && s.ps.length >= 2) {
         var ps = s.ps.slice().sort(function (a, b) { return a - b; });
         out.soldMedian = (ps.length % 2) ? ps[(ps.length - 1) / 2]
@@ -582,9 +624,9 @@
           why = risk === 'low' ? 'real sold prices back this resale, with a real margin under them'
             : 'sold prices back the resale, but the edge or supply is thin';
         } else {
-          // No real sold prices yet. Asks alone cannot verify a flip — even a
-          // tight ask cluster is often sellers herding at a fantasy price
-          // (15m-listed cloaks that actually trade at 2m). Unverified = hidden.
+          // No real sold prices. Asks alone cannot verify a flip — sellers herd
+          // at fantasy prices even in deep tight clusters (10+ gloves asked at
+          // 9-12m that actually trade at 5m). Unverified = hidden.
           risk = 'high';
           why = median > target * 1.8
             ? 'asks on this item are wildly scattered — no reliable resale price'

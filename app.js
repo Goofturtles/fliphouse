@@ -658,6 +658,15 @@
   setInterval(pollSales, SALES_MS);
   applyAutoRescan();
 
+  // adopt the repo's continuously-collected sales table (hours of real sales)
+  // BEFORE the first live poll, so the two never race each other
+  var boot = window.FlipEngine.sales.bootstrap('data/sales.json').then(function (adopted) {
+    if (!adopted) return;
+    var r = window.FlipEngine.rebuild();
+    if (r) adoptResult(r, true);
+    else render();
+  });
+
   if (!state.meta || Date.now() - state.meta.scannedAt > FRESH_MS) startScan();
-  else pollSales();
+  else boot.then(function () { pollSales(); });
 })();
