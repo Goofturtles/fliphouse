@@ -390,6 +390,7 @@
               ' · matching median <b>' + fmt(f.median) + '</b>. You buy the gold one; the sell price is ' + basisNote + '.</p>') +
           '<p class="det-note">' + demandNote(f) + '</p>' +
           (f.recomb ? '<p class="det-note"><b>Recombobulated</b> — rarity was upgraded with a Recombobulator; fewer buyers want these, so expect a slower sale.</p>' : '') +
+          (f.npcBuy != null ? '<p class="det-note"><b>NPC shop:</b> an NPC sells this item for <b>' + fmt(f.npcBuy) + '</b>.</p>' : '') +
           (f.why ? '<p class="det-note"><b>Why ' + riskLabel + ':</b> ' + esc(f.why) + '.</p>' : '') + '</div>' +
         '<div class="det-block"><h4>How to buy</h4>' +
           '<div class="cmd-row"><code class="cmd">' + esc(cmd) + '</code>' +
@@ -663,6 +664,16 @@
   setInterval(tickAge, 30000);
   setInterval(pollSales, SALES_MS);
   applyAutoRescan();
+
+  // NPC shop prices — an NPC selling an item outright caps its AH resale
+  fetch('data/npc.json', { cache: 'no-cache' })
+    .then(function (r) { return r.json(); })
+    .then(function (m) {
+      window.FlipEngine.setNpcTable(m);
+      var rn = window.FlipEngine.rebuild();
+      if (rn) adoptResult(rn, true);
+    })
+    .catch(function () { /* table is optional */ });
 
   // adopt the repo's continuously-collected sales table (hours of real sales)
   // BEFORE the first live poll, so the two never race each other

@@ -16,6 +16,9 @@
   var lastGroups = null; // Map from the most recent scan, kept for rebuild()
   var lastMeta = null;
 
+  // display name -> coins an NPC charges for the item outright (data/npc.json)
+  var NPC_BUY = {};
+
   /* Reforge prefixes stripped so "Sharp Livid Dagger" and "Fabled Livid Dagger"
      land in the same price group. Sorted longest-first at init so multi-word
      reforges match before their shorter cousins. */
@@ -779,6 +782,13 @@
           why = 'a better-equipped copy is listed at or under your resale price — buyers will take that one';
         }
 
+        // an NPC selling it outright caps what anyone pays on the AH
+        var npcBuy = NPC_BUY[g.display];
+        if (npcBuy != null && target > npcBuy) {
+          risk = 'high';
+          why = 'an NPC sells this item outright for less than this resale — nobody pays the AH premium';
+        }
+
         flips.push({
           key: key, lot: li, name: g.display, sub: g.sub, kind: g.kind, tier: g.tier,
           buy: buy.p, uuid: buy.uuid, sell: target, fee: fee, basis: basisUsed,
@@ -786,6 +796,7 @@
           median: median, risk: risk, why: why,
           sold: d.sold, estDay: d.estDay, soldMedian: d.soldMedian,
           weekAvg: d.weekAvg, weekN: d.weekN, recomb: g.rc,
+          npcBuy: npcBuy != null ? npcBuy : null,
           ladder: [buy.p].concat(comp.slice(0, 7).map(function (x) { return x.p; }))
         });
       }
@@ -806,7 +817,8 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 15,
+    version: 16,
+    setNpcTable: function (map) { if (map && typeof map === 'object') NPC_BUY = map; },
     scan: scan,
     rebuild: rebuild,
     setOptions: setOptions,
