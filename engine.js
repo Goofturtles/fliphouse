@@ -397,6 +397,8 @@
 
   var sales = {
     data: freshSales(),
+    gone: new Set(),   // auction ids seen in the ended feed — no longer buyable
+    goneWins: [],
 
     load: function () {
       try {
@@ -453,6 +455,10 @@
         });
         return Promise.all(jobs).then(function () {
           self.data.lastWindow = json.lastUpdated;
+          // these auctions just left the AH — flips pointing at them are dead
+          self.goneWins.push(list.map(function (a) { return a.auction_id; }));
+          if (self.goneWins.length > 15) self.goneWins.shift();
+          self.gone = new Set([].concat.apply([], self.goneWins));
           if (self.data.coveredMs >= DAY_MS) {
             // sliding 24h window: each new minute decays the old ones out, so
             // counts and coverage stay proportional forever — no resets needed
@@ -641,8 +647,14 @@
 
     groups.forEach(function (g, key) {
       var L = g.listings;
+      // drop listings that already sold (seen in the ended feed) — a flip
+      // pointing at one sends the buyer to a dead /viewauction
+      if (sales.gone.size) L = L.filter(function (x) { return !sales.gone.has(x.uuid); });
       var n = L.length;
-      if (n < minSupply) return; // need real market depth to price the resale
+      var d = sales.stats(key);
+      var soldFresh = d.soldMedian != null;
+      // depth requirement is about price EVIDENCE — real sold data substitutes
+      if (n < 1 || (n < minSupply && !soldFresh)) return;
       L.sort(function (a, b) { return a.p - b.p; });
 
       var sets = new Array(n);
@@ -653,15 +665,17 @@
          in the difference — a clean copy never matches a maxed one. */
       function alike(i, j) {
         var A = setOf(i), B = setOf(j);
+        // budget scales with how decorated the items are: maxed gear with a
+        // dozen significant tokens tolerates a tier-step or two; simple items
+        // still demand a near-exact match
+        var allowed = Math.max(1, Math.round(0.2 * Math.max(A.size, B.size)));
         var diff = 0;
         A.forEach(function (h) { if (!B.has(h)) diff++; });
         B.forEach(function (h) { if (!A.has(h)) diff++; });
-        return diff <= 1;
+        return diff <= allowed;
       }
 
-      var d = sales.stats(key);
-
-      for (var li = 0; li < Math.min(maxLots, n - 1); li++) {
+      for (var li = 0; li < Math.min(maxLots, Math.max(n - 1, soldFresh && n === 1 ? 1 : 0)); li++) {
         var buy = L[li];
 
         // resale evidence must come from listings that are actually the same
@@ -671,12 +685,17 @@
           if (alike(li, j)) comp.push(L[j]);
         }
         var cn = comp.length;
-        if (cn + 1 < minSupply) continue; // name twins exist, true twins don't
+        // a lone listing can still flip when it's the ONLY one of its name and
+        // real sold prices anchor the resale; sold data also substitutes for
+        // one missing ask-side twin
+        var anchor = cn === 0 && soldFresh && n === 1;
+        if (!anchor && cn + 1 < (soldFresh ? Math.min(2, minSupply) : minSupply)) continue;
 
-        var median = (cn % 2) ? comp[(cn - 1) / 2].p : Math.round((comp[cn / 2 - 1].p + comp[cn / 2].p) / 2);
+        var median = cn ? ((cn % 2) ? comp[(cn - 1) / 2].p : Math.round((comp[cn / 2 - 1].p + comp[cn / 2].p) / 2)) : null;
         var basisUsed = opts.basis;
         var target;
-        if (opts.basis === 'median') target = median;
+        if (anchor) { target = Math.round(d.soldMedian * 0.95); basisUsed = 'sold'; }
+        else if (opts.basis === 'median') target = median;
         // sold prices are tracked per name, so only trust them when every
         // same-name listing is a true lore twin (no mixed variants)
         else if (opts.basis === 'sold' && d.soldMedian != null && cn + 1 === n) target = d.soldMedian;
@@ -688,6 +707,9 @@
         var roi = profit / buy.p;
         if (roi < 0.03) continue;
         if (buy.p < 1000) continue;
+        // a lone listing at half the sold price is usually a lesser hidden
+        // variant, not a gift — cap anchor flips at 2x
+        if (anchor && roi > 1) continue;
 
         /* ---- risk: sold prices are truth, asks are wishes ----
            Default-visible flips need EITHER real sold prices backing the resale
@@ -763,7 +785,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 12,
+    version: 13,
     scan: scan,
     rebuild: rebuild,
     setOptions: setOptions,

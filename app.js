@@ -383,16 +383,18 @@
       '</summary>' +
       '<div class="det"><div class="det-grid">' +
         '<div class="det-block"><h4>Price ladder</h4><div class="ladder">' + ladder + '</div>' +
-          '<p class="det-note">Your buy plus the ' + Math.min(f.supply - 1, 7) + ' cheapest <b>matching</b> listings — lore-checked so enchants, dyes and upgrades line up' +
-            (f.groupSize > f.supply ? ' (' + (f.groupSize - f.supply) + ' same-name listings didn’t match and are ignored)' : '') +
-            ' · matching median <b>' + fmt(f.median) + '</b>. You buy the gold one; the sell price is ' + basisNote + '.</p>' +
+          (f.supply === 1
+            ? '<p class="det-note">The only listing of its kind on the AH right now — the resale price comes from what buyers actually paid for it, not from other asks.</p>'
+            : '<p class="det-note">Your buy plus the ' + Math.min(f.supply - 1, 7) + ' cheapest <b>matching</b> listings — lore-checked so enchants, dyes and upgrades line up' +
+              (f.groupSize > f.supply ? ' (' + (f.groupSize - f.supply) + ' same-name listings didn’t match and are ignored)' : '') +
+              ' · matching median <b>' + fmt(f.median) + '</b>. You buy the gold one; the sell price is ' + basisNote + '.</p>') +
           '<p class="det-note">' + demandNote(f) + '</p>' +
           (f.recomb ? '<p class="det-note"><b>Recombobulated</b> — rarity was upgraded with a Recombobulator; fewer buyers want these, so expect a slower sale.</p>' : '') +
           (f.why ? '<p class="det-note"><b>Why ' + riskLabel + ':</b> ' + esc(f.why) + '.</p>' : '') + '</div>' +
         '<div class="det-block"><h4>How to buy</h4>' +
           '<div class="cmd-row"><code class="cmd">' + esc(cmd) + '</code>' +
           '<button type="button" class="btn copy-cmd" data-cmd="' + esc(cmd) + '">Copy</button></div>' +
-          '<p class="det-note">Paste in chat → buy for <b>' + fmt(f.buy) + '</b> → relist around <b>' + relist + '</b> → clear <b>+' + fmt(f.profit) + '</b> after the ' + (f.fee * 100) + '% tax. Check the lore and the live price in game first — new listings appear every second, so a cheaper copy may exist by now.</p></div>' +
+          '<p class="det-note">Paste in chat → buy for <b>' + fmt(f.buy) + '</b> → relist around <b>' + relist + '</b> → clear <b>+' + fmt(f.profit) + '</b> after the ' + (f.fee * 100) + '% tax. Check the lore and the live price in game first — new listings appear every second, so a cheaper copy may exist by now. If the game says the auction doesn’t exist, someone bought it first — rescan.</p></div>' +
       '</div></div>' +
     '</details>';
   }

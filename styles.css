@@ -443,19 +443,21 @@ p.set-hint { margin: 4px 0 14px; }
   .stat-v { font-size: 20px; }
 
   .row { border: 1px solid var(--border-soft); border-radius: 16px; margin-bottom: 10px; background: var(--panel); }
-  .rgrid { grid-template-columns: repeat(2, 1fr); gap: 10px 14px; }
-  .row summary { padding: 14px; }
-  .c-item { grid-column: 1 / -1; }
+  .rgrid { grid-template-columns: repeat(3, 1fr); gap: 12px 10px; }
+  .row summary { padding: 14px; position: relative; }
+  .c-item { grid-column: 1 / -1; padding-right: 48px; }
+  .iname { white-space: normal; line-height: 1.35; } /* names wrap instead of clipping the recomb badge */
   .c.num { text-align: left; }
+  .cv { font-size: 14px; }
   .cl {
     position: static; width: auto; height: auto;
     margin: 0; overflow: visible; clip: auto; white-space: normal;
     display: block; color: var(--faint);
-    font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.5;
+    font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; line-height: 1.6;
   }
-  .c .badge { margin-top: 3px; }
-  .c.act { grid-column: 1 / -1; text-align: right; }
-  .copy { width: 44px; height: 44px; }
+  .c .badge { margin-top: 2px; }
+  .c.act { position: absolute; top: 10px; right: 10px; }
+  .copy { width: 40px; height: 40px; }
   .det-grid { grid-template-columns: 1fr; }
   .det { padding: 0 14px 16px; }
 }
