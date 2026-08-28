@@ -620,8 +620,13 @@
           risk = 'high'; why = 'margin looks too good — usually hidden value explains the cheap price';
         } else if (d.soldMedian != null && buy.p >= d.soldMedian) {
           risk = 'high'; why = 'recent buyers paid less than this buy price — no real edge';
-        } else if (d.soldMedian != null && target > d.soldMedian * 1.4) {
-          risk = 'high'; why = 'sellers are asking way above what this item actually sells for';
+        } else if (d.soldMedian != null && target > d.soldMedian * 1.2) {
+          risk = 'high'; why = 'sellers are asking above what this item actually sells for';
+        } else if (d.soldMedian != null && d.soldMedian > target * 2.5) {
+          // sold prices miles above this cluster belong to pricier versions of
+          // the same name (kill counts, coins paid — value the lore can't show);
+          // they verify nothing about these cheap copies
+          risk = 'high'; why = 'recent sales look like pricier versions of this item — they can\'t verify this cheap cluster';
         } else if (d.soldMedian != null) {
           // corroborated: buyers really pay around this price, and the buy is under it
           risk = (buy.p <= d.soldMedian * 0.85 && cn + 1 >= 4 && nearT >= 2) ? 'low' : 'med';
@@ -674,6 +679,7 @@
   sales.load();
 
   window.FlipEngine = {
+    version: 8,
     scan: scan,
     rebuild: rebuild,
     setOptions: setOptions,
