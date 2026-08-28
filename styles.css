@@ -298,6 +298,7 @@ p.set-hint { margin: 4px 0 14px; }
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
 }
 .cv { display: block; }
+.cw { display: block; color: var(--faint); font: 500 11px/1.5 var(--font-num); }
 .cv.profit { color: var(--green); }
 .cv.roi { color: var(--muted); }
 

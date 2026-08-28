@@ -392,6 +392,11 @@
               if (a.bin) { // …but only BIN prices are resale evidence (bid hammers skew low)
                 s.ps.push(a.price);
                 if (s.ps.length > 8) s.ps.shift();
+                // per-day rollups: [dayIndex, priceSum, count] — feeds the 7-day average
+                var day = Math.floor((a.timestamp || Date.now()) / DAY_MS);
+                var w = s.w || (s.w = []);
+                if (w.length && w[w.length - 1][0] === day) { w[w.length - 1][1] += a.price; w[w.length - 1][2]++; }
+                else { w.push([day, a.price, 1]); if (w.length > 7) w.shift(); }
               }
               s.t = a.timestamp || Date.now();
             })
@@ -409,9 +414,13 @@
             self.data.coveredMs = Math.min(self.data.coveredMs + 60000, DAY_MS);
           }
           var cutoff = Date.now() - DAY_MS;
+          var today = Math.floor(Date.now() / DAY_MS);
           var smp2 = self.data.samples;
           for (var pk in smp2) {
-            if (smp2[pk].t < cutoff || smp2[pk].c < 0.05) delete smp2[pk];
+            var keep = smp2[pk];
+            var hasWeek = keep.w && keep.w.some(function (b) { return b[0] > today - 7; });
+            if ((keep.t < cutoff || keep.c < 0.05) && !hasWeek) { delete smp2[pk]; continue; }
+            if (keep.w) keep.w = keep.w.filter(function (b) { return b[0] > today - 7; });
           }
           self.prune();
           self.save();
@@ -461,7 +470,12 @@
     stats: function (key) {
       var cov = this.data.coveredMs;
       var s = this.data.samples[key];
-      var out = { sold: s ? Math.floor(s.c) : 0, estDay: null, soldMedian: null, coverageMs: cov };
+      var out = { sold: s ? Math.floor(s.c) : 0, estDay: null, soldMedian: null, weekAvg: null, weekN: 0, coverageMs: cov };
+      if (s && s.w && s.w.length) {
+        var tot = 0, wn = 0;
+        for (var wi = 0; wi < s.w.length; wi++) { tot += s.w[wi][1]; wn += s.w[wi][2]; }
+        if (wn >= 3) { out.weekAvg = Math.round(tot / wn); out.weekN = wn; }
+      }
       if (s && s.ps.length >= 2) {
         var ps = s.ps.slice().sort(function (a, b) { return a - b; });
         out.soldMedian = (ps.length % 2) ? ps[(ps.length - 1) / 2]
@@ -622,6 +636,8 @@
           risk = 'high'; why = 'recent buyers paid less than this buy price — no real edge';
         } else if (d.soldMedian != null && target > d.soldMedian * 1.2) {
           risk = 'high'; why = 'sellers are asking above what this item actually sells for';
+        } else if (d.weekAvg != null && target > d.weekAvg * 1.3) {
+          risk = 'high'; why = 'asking above this item\'s weekly average price';
         } else if (d.soldMedian != null && d.soldMedian > target * 2.5) {
           // sold prices miles above this cluster belong to pricier versions of
           // the same name (kill counts, coins paid — value the lore can't show);
@@ -659,6 +675,7 @@
           profit: profit, roi: roi, supply: cn + 1, groupSize: n,
           median: median, risk: risk, why: why,
           sold: d.sold, estDay: d.estDay, soldMedian: d.soldMedian,
+          weekAvg: d.weekAvg, weekN: d.weekN,
           ladder: [buy.p].concat(comp.slice(0, 7).map(function (x) { return x.p; }))
         });
       }
@@ -679,7 +696,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 8,
+    version: 9,
     scan: scan,
     rebuild: rebuild,
     setOptions: setOptions,

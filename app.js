@@ -343,8 +343,9 @@
       return 'No demand data on this item yet — keep the tab open, real sales are sampled every minute.';
     }
     var mins = Math.round(d.coverageMs / 60000);
-    var s = 'Seen <b>' + f.sold + ' sold</b> in ' + mins + 'm of watching → est <b>' + fmtRate(f.estDay) + '</b>.';
+    var s = 'Seen <b>' + f.sold + ' sold</b> in ' + mins + 'm of watching → est <b>' + fmtRate(f.estDay) + '</b> (≈' + fmt(Math.round(f.estDay * 7)) + '/week).';
     if (f.soldMedian != null) s += ' Buyers actually paid around <b>' + fmt(f.soldMedian) + '</b>.';
+    if (f.weekAvg != null) s += ' 7-day average price <b>' + fmt(f.weekAvg) + '</b> across ' + f.weekN + ' sales.';
     return s;
   }
 
@@ -372,9 +373,9 @@
         '<div class="c num"><span class="cl">Sell at</span><span class="cv">' + fmt(f.sell) + '</span></div>' +
         '<div class="c num"><span class="cl">Profit</span><span class="cv profit">+' + fmt(f.profit) + '</span></div>' +
         '<div class="c num"><span class="cl">ROI</span><span class="cv roi">' + fmtPct(f.roi) + '</span></div>' +
-        '<div class="c num"><span class="cl">Sells/day</span>' +
+        '<div class="c num"><span class="cl">Sells</span>' +
           (f.estDay == null ? '<span class="cv roi" role="img" aria-label="no data yet">—</span>'
-            : '<span class="cv roi">' + fmtRate(f.estDay) + '</span>') + '</div>' +
+            : '<span class="cv roi">' + fmtRate(f.estDay) + '</span><span class="cw">≈' + fmt(Math.round(f.estDay * 7)) + '/wk</span>') + '</div>' +
         '<div class="c"><span class="cl">Risk</span><span class="badge b-' + f.risk + '">' + riskLabel + '</span></div>' +
         '<div class="c act"><button type="button" class="copy" data-cmd="' + esc(cmd) + '" title="Copy ' + esc(cmd) + '" aria-label="Copy view-auction command for ' + esc(f.name) + '">' + COPY_ICON + '</button></div>' +
       '</summary>' +
