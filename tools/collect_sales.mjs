@@ -42,6 +42,8 @@ for (let i = 0; i < POLLS; i++) {
 }
 
 mkdirSync(dataDir, { recursive: true });
+// per-sale history (buyer uuids) stays session-local — keep the shared table lean
+for (const k of Object.keys(sales.data.samples)) delete sales.data.samples[k].h;
 writeFileSync(file, JSON.stringify(sales.data));
 console.log(`wrote ${Object.keys(sales.data.samples).length} keys,` +
   ` coverage ${(sales.data.coveredMs / 60000) | 0}m`);

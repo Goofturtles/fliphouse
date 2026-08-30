@@ -452,6 +452,10 @@
               var s = self.data.samples[c.key];
               if (!s) s = self.data.samples[c.key] = { c: 0, ps: [], t: 0 };
               s.c++; // demand counts every sale…
+              // who paid what, when — the last 6 real purchases (BIN or bid win)
+              var hh = s.h || (s.h = []);
+              hh.unshift([a.price, a.timestamp || Date.now(), a.buyer || '', a.bin ? 1 : 0]);
+              if (hh.length > 6) hh.pop();
               if (a.bin) { // …but only BIN prices are resale evidence (bid hammers skew low)
                 s.ps.push(a.price);
                 if (s.ps.length > 8) s.ps.shift();
@@ -529,11 +533,16 @@
             lastWindow: remote.lastWindow || 0,
             samples: remote.samples
           };
-          // local week history survives adoption — union buckets by day (only
-          // in-window ones), keeping the larger count where both saw a day
+          // local week history AND local sale-history survive adoption — union
+          // buckets by day (in-window only), keep the larger count per day
           var today7 = Math.floor(Date.now() / DAY_MS) - 7;
           for (var lk in localSmp) {
+            var lh = localSmp[lk].h;
             var lw = (localSmp[lk].w || []).filter(function (b) { return b[0] > today7; });
+            if (lh && lh.length) {
+              var rsh = self.data.samples[lk];
+              if (rsh && !(rsh.h && rsh.h.length)) rsh.h = lh;
+            }
             if (!lw.length) continue;
             var rs = self.data.samples[lk];
             if (!rs) { self.data.samples[lk] = { c: 0, ps: [], t: localSmp[lk].t, w: lw }; continue; }
@@ -555,7 +564,7 @@
       // a key can live on week history alone — its 24h fields are stale then
       // and must not pose as fresh evidence (or mute the never-sells signal)
       var live = !!(s && Date.now() - s.t <= DAY_MS);
-      var out = { sold: live ? Math.floor(s.c) : 0, estDay: null, soldMedian: null, weekAvg: null, weekN: 0, coverageMs: cov };
+      var out = { sold: live ? Math.floor(s.c) : 0, estDay: null, soldMedian: null, weekAvg: null, weekN: 0, coverageMs: cov, hist: (s && s.h) || [] };
       if (s && s.w && s.w.length) {
         var tot = 0, wn = 0;
         for (var wi = 0; wi < s.w.length; wi++) { tot += s.w[wi][1]; wn += s.w[wi][2]; }
@@ -842,6 +851,7 @@
           sold: d.sold, estDay: d.estDay, soldMedian: d.soldMedian,
           weekAvg: d.weekAvg, weekN: d.weekN, recomb: g.rc,
           npcBuy: npcBuy != null ? npcBuy : null,
+          hist: d.hist.slice(0, 5),
           ladder: [buy.p].concat(comp.slice(0, 7).map(function (x) { return x.p; }))
         });
       }
@@ -862,7 +872,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 22,
+    version: 23,
     setNpcTable: function (map) { if (map && typeof map === 'object') NPC_BUY = map; },
     scan: scan,
     rebuild: rebuild,

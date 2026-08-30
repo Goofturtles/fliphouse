@@ -442,6 +442,17 @@ p.set-hint { margin: 4px 0 14px; }
 .lad.snipe { color: #23190a; background: var(--gold); border-color: var(--gold); }
 .det-note { color: var(--faint); font-size: 13px; margin: 10px 0 0; max-width: 46ch; }
 .det-note b { color: var(--muted); font-weight: 600; }
+.sh-head { font-size: 11px; color: var(--faint); letter-spacing: 0.08em; text-transform: uppercase; margin: 14px 0 6px; }
+.sh-row {
+  display: flex; align-items: baseline; gap: 10px;
+  font: 500 13px/1.6 var(--font-num);
+  padding: 2px 0;
+}
+.sh-row b { min-width: 64px; font-weight: 600; }
+.sh-when { color: var(--faint); font-size: 12px; min-width: 70px; }
+.sh-buyer { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+.sh-kind { color: var(--faint); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+
 .cmd-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cmd {
   font: 600 13px/1.5 var(--font-num);

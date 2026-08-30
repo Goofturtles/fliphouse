@@ -107,6 +107,40 @@
     return Math.round(num * mult);
   }
 
+  function timeAgo(ts) {
+    var s = Math.max(0, (Date.now() - ts) / 1000);
+    if (s < 90) return 'just now';
+    if (s < 5400) return Math.round(s / 60) + 'm ago';
+    if (s < 129600) return Math.round(s / 3600) + 'h ago';
+    return Math.round(s / 86400) + 'd ago';
+  }
+
+  /* buyer uuid -> username, cached; resolved lazily when a row opens */
+  var nameCache = lsGet('ahflips:names') || {};
+  var namePending = {};
+  function resolveBuyer(uuid, el) {
+    if (!uuid) return;
+    if (nameCache[uuid]) { el.textContent = nameCache[uuid]; return; }
+    if (namePending[uuid]) { namePending[uuid].push(el); return; }
+    namePending[uuid] = [el];
+    fetch('https://playerdb.co/api/player/minecraft/' + encodeURIComponent(uuid))
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var n = j && j.data && j.data.player && j.data.player.username;
+        if (!n) throw new Error('no name');
+        nameCache[uuid] = n;
+        var keys = Object.keys(nameCache);
+        while (keys.length > 400) { delete nameCache[keys.shift()]; }
+        lsSet('ahflips:names', nameCache);
+        namePending[uuid].forEach(function (e) { e.textContent = n; });
+        delete namePending[uuid];
+      })
+      .catch(function () {
+        namePending[uuid].forEach(function (e) { e.textContent = 'a player'; });
+        delete namePending[uuid];
+      });
+  }
+
   function rarKey(tier) {
     var t = String(tier || 'common').toLowerCase();
     var known = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'divine', 'special', 'very_special'];
@@ -450,6 +484,13 @@
           '<p class="det-note">' + demandNote(f) + '</p>' +
           (f.recomb ? '<p class="det-note"><b>Recombobulated</b> — rarity was upgraded with a Recombobulator; fewer buyers want these, so expect a slower sale.</p>' : '') +
           (f.npcBuy != null ? '<p class="det-note"><b>NPC shop:</b> an NPC sells this item for <b>' + fmt(f.npcBuy) + '</b>.</p>' : '') +
+          (f.hist && f.hist.length ?
+            '<h4 class="sh-head">Recent sales</h4>' + f.hist.map(function (h) {
+              return '<div class="sh-row"><b>' + fmt(h[0]) + '</b>' +
+                '<span class="sh-when">' + timeAgo(h[1]) + '</span>' +
+                '<span class="sh-buyer"' + (h[2] ? ' data-uuid="' + esc(h[2]) + '"' : '') + '>' + (h[2] ? '…' : '—') + '</span>' +
+                '<span class="sh-kind">' + (h[3] ? 'BIN' : 'bid win') + '</span></div>';
+            }).join('') : '') +
           (f.why ? '<p class="det-note"><b>Why ' + riskLabel + ':</b> ' + esc(f.why) + '.</p>' : '') + '</div>' +
         '<div class="det-block"><h4>How to buy</h4>' +
           '<div class="cmd-row"><code class="cmd">' + esc(cmd) + '</code>' +
@@ -680,6 +721,14 @@
     applyAutoRescan();
     toast(state.autoRescan ? 'Auto-rescan on — every 2.5 min' : 'Auto-rescan off');
   });
+
+  // resolve buyer names only when a row actually opens ('toggle' doesn't bubble — capture)
+  document.addEventListener('toggle', function (e) {
+    var d = e.target;
+    if (!d || !d.open || !d.classList || !d.classList.contains('row')) return;
+    var spans = d.querySelectorAll('.sh-buyer[data-uuid]');
+    for (var i = 0; i < spans.length; i++) resolveBuyer(spans[i].getAttribute('data-uuid'), spans[i]);
+  }, true);
 
   // one delegated handler for every copy button (summary buttons must not toggle the row)
   document.addEventListener('click', function (e) {
