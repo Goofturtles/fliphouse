@@ -702,10 +702,31 @@
     return build(lastGroups, lastMeta);
   }
 
+  var STAR_RANK = { '': 0, '1-4✪': 1, '5✪': 2, 'M✪': 3, '1-89': 0, '90-99': 1, '100': 2, '101-199': 3, '200': 4 };
+
   function build(groups, meta) {
     var flips = [];
     var minSupply = Math.max(3, opts.minSupply | 0);
     var maxLots = Math.min(3, Math.max(1, opts.lots | 0));
+
+    /* Name-level market index — dominance must see ALL variants of a name.
+       A fresh no-star piece asking 29m is dead when an Ancient 5✪ maxed one
+       sits at 21m, even though they live in different comparability buckets. */
+    var nameIdx = new Map();
+    groups.forEach(function (g, key) {
+      var parts = key.split('|');
+      if (parts[0] === 'book') return;
+      if (parts[1] && parts[1].lastIndexOf('New Year Cake', 0) === 0) return; // years aren't ordered value
+      var rank = STAR_RANK[parts[0] === 'pet' ? parts[3] : parts[2]] || 0;
+      var nk = parts[0] + '|' + parts[1] + '|' + (parts[0] === 'pet' ? parts[2] : parts[3]);
+      var arr = nameIdx.get(nk);
+      if (!arr) { arr = []; nameIdx.set(nk, arr); }
+      for (var ii = 0; ii < g.listings.length; ii++) {
+        var x = g.listings[ii];
+        if (sales.gone.size && sales.gone.has(x.uuid)) continue;
+        arr.push({ p: x.p, size: (x.s || []).length, rank: rank, key: key });
+      }
+    });
 
     groups.forEach(function (g, key) {
       var L = g.listings;
@@ -766,11 +787,28 @@
         // a better-equipped same-name copy listed at or under our resale price
         // dominates it — buyers browsing the name will take that one first
         var dominated = false;
+        var mySize = setOf(li).size;
         if (!anchor) {
-          var mySize = setOf(li).size;
           for (var q = 0; q < n && L[q].p <= target; q++) {
             if (q === li) continue;
             if (setOf(q).size >= mySize && !alike(li, q)) { dominated = true; break; }
+          }
+        }
+        // …and across OTHER star/level buckets of the same name: equal-or-more
+        // stars plus an equal-or-richer fingerprint at ≤ target beats us
+        if (!dominated && !anchor) {
+          var kp = key.split('|');
+          var isCake = kp[1] && kp[1].lastIndexOf('New Year Cake', 0) === 0;
+          if (kp[0] !== 'book' && !isCake) {
+            var myRank = STAR_RANK[kp[0] === 'pet' ? kp[3] : kp[2]] || 0;
+            var mkt = nameIdx.get(kp[0] + '|' + kp[1] + '|' + (kp[0] === 'pet' ? kp[2] : kp[3]));
+            if (mkt) {
+              for (var q2 = 0; q2 < mkt.length; q2++) {
+                var e2 = mkt[q2];
+                if (e2.key === key) continue; // own bucket handled above with lore matching
+                if (e2.p <= target && e2.rank >= myRank && e2.size >= mySize) { dominated = true; break; }
+              }
+            }
           }
         }
 
