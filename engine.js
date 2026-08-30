@@ -545,7 +545,7 @@
             }
             if (!lw.length) continue;
             var rs = self.data.samples[lk];
-            if (!rs) { self.data.samples[lk] = { c: 0, ps: [], t: localSmp[lk].t, w: lw }; continue; }
+            if (!rs) { self.data.samples[lk] = { c: 0, ps: [], t: localSmp[lk].t, w: lw, h: lh || [] }; continue; }
             var byDay = {};
             (rs.w || []).forEach(function (b) { byDay[b[0]] = b; });
             lw.forEach(function (b) { if (!byDay[b[0]] || byDay[b[0]][2] < b[2]) byDay[b[0]] = b; });
@@ -872,7 +872,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 23,
+    version: 24,
     setNpcTable: function (map) { if (map && typeof map === 'object') NPC_BUY = map; },
     scan: scan,
     rebuild: rebuild,
