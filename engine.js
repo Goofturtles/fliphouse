@@ -210,6 +210,11 @@
     for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
     return h;
   }
+  // HARD tokens (low bit set) are absolute discriminators — a dye, a filled
+  // gem, pet candy or a progression tier is never "close enough". SOFT tokens
+  // (enchant tiers etc.) share the small tolerance budget.
+  function hashHard(s) { return hashStr(s) | 1; }
+  function hashSoft(s) { return hashStr(s) & ~1; }
 
   /* Cheap vanilla-table enchants at level V or below add no real value — a
      "Growth V, Protection V" piece IS a clean piece. Only names on this list
@@ -268,14 +273,18 @@
       if (t.charAt(0) === '▸') continue;      // pet XP progress
       // progression stat lines ARE identity: kill counts / visitors served
       // ("Piece Bonus: +300", "MAXED OUT! NICE!") separate maxed from fresh
-      if (t.lastIndexOf('Piece Bonus:', 0) === 0) { out.push(hashStr(t)); continue; }
-      if (t.indexOf('MAXED OUT') !== -1) { out.push(hashStr(t)); continue; }
+      if (t.lastIndexOf('Piece Bonus:', 0) === 0) { out.push(hashHard(t)); continue; }
+      if (t.indexOf('MAXED OUT') !== -1) { out.push(hashHard(t)); continue; }
       if (STAT_RE.test(t)) continue;          // numeric stat rolls
-      if (t.indexOf('Pet Candy Used') !== -1) { out.push(hashStr(t)); continue; } // "(2/10) Pet Candy Used" — candied ≠ clean
+      if (t.indexOf('Pet Candy Used') !== -1) { out.push(hashHard(t)); continue; } // candied ≠ clean, ever
       // gem slots: filled vs empty vs locked lives ONLY in the color codes
       // (§8[§8x§8] empty · §8[§7x§8] unlocked · §9[§dx§9] filled) — hash RAW
-      if (t.lastIndexOf('Gemstones:', 0) === 0) { out.push(hashStr(raw)); continue; }
-      if (GEM_RE.test(raw)) { out.push(hashStr(raw)); continue; }
+      if (t.lastIndexOf('Gemstones:', 0) === 0) { out.push(hashHard(raw)); continue; }
+      if (/\bDyed\b/.test(t)) { out.push(hashHard(t)); continue; } // "✿ Black Ice Dyed"
+      // glyph lines only count as gem SLOTS when they have slot brackets —
+      // reforge/ability paragraphs full of stat icons are boilerplate, and
+      // tokenizing them broke reforge fungibility and dominance sizing
+      if (GEM_RE.test(raw) && t.indexOf('[') !== -1 && t.indexOf(']') !== -1) { out.push(hashHard(raw)); continue; }
       var tl = t.replace(/,\s*$/, ''); // wrapped enchant lists end mid-list with a comma
       if (isEnchLine(tl)) {
         // one token PER enchant, so "Growth V, Protection V" and a wrapped or
@@ -284,13 +293,16 @@
         for (var s2 = 0; s2 < segs.length; s2++) {
           var sg = segs[s2].trim();
           if (isNoiseEnch(sg)) continue; // Growth V / Prot V etc. — clean in disguise
-          out.push(hashStr(sg));
+          out.push(hashSoft(sg));
         }
         continue;
       }
-      if (/^[A-Za-z ]+ Pet(, .+)?$/.test(t)) { out.push(hashStr(t)); continue; } // pet footer names the applied skin
+      if (/^[A-Za-z ]+ Pet(, .+)?$/.test(t)) { out.push(hashHard(t)); continue; } // pet footer names the applied skin
       var c = t.indexOf(': ');
-      if (c > 0) out.push(hashStr(t));        // Ability: / Held Item: / Color: / Upgrade Module: …
+      if (c > 0) {
+        var isHardKV = t.lastIndexOf('Held Item:', 0) === 0 || t.lastIndexOf('Color:', 0) === 0;
+        out.push(isHardKV ? hashHard(t) : hashSoft(t)); // Ability:/Upgrade Module: soft; Held Item:/Color: hard
+      }
     }
     return out;
   }
@@ -718,7 +730,10 @@
       if (parts[0] === 'book') return;
       if (parts[1] && parts[1].lastIndexOf('New Year Cake', 0) === 0) return; // years aren't ordered value
       var rank = STAR_RANK[parts[0] === 'pet' ? parts[3] : parts[2]] || 0;
-      var nk = parts[0] + '|' + parts[1] + '|' + (parts[0] === 'pet' ? parts[2] : parts[3]);
+      // items drop the tier from the market key: same-name tier differences are
+      // recombs, and a clean cheap copy absolutely competes with a recombed one
+      // (pets keep tier — different pet rarities are genuinely different pets)
+      var nk = parts[0] === 'pet' ? 'pet|' + parts[1] + '|' + parts[2] : 'item|' + parts[1];
       var arr = nameIdx.get(nk);
       if (!arr) { arr = []; nameIdx.set(nk, arr); }
       for (var ii = 0; ii < g.listings.length; ii++) {
@@ -752,10 +767,10 @@
         // dozen significant tokens tolerates a tier-step or two; simple items
         // still demand a near-exact match
         var allowed = Math.max(1, Math.round(0.2 * Math.max(A.size, B.size)));
-        var diff = 0;
-        A.forEach(function (h) { if (!B.has(h)) diff++; });
-        B.forEach(function (h) { if (!A.has(h)) diff++; });
-        return diff <= allowed;
+        var diff = 0, hard = false;
+        A.forEach(function (h) { if (!B.has(h)) { diff++; if (h & 1) hard = true; } });
+        B.forEach(function (h) { if (!A.has(h)) { diff++; if (h & 1) hard = true; } });
+        return !hard && diff <= allowed;
       }
 
       for (var li = 0; li < Math.min(maxLots, Math.max(n - 1, soldFresh && n === 1 ? 1 : 0)); li++) {
@@ -795,13 +810,15 @@
           }
         }
         // …and across OTHER star/level buckets of the same name: equal-or-more
-        // stars plus an equal-or-richer fingerprint at ≤ target beats us
-        if (!dominated && !anchor) {
+        // stars plus an equal-or-richer fingerprint at ≤ target beats us.
+        // This applies to ANCHOR flips too — "only listing of its kind" is a
+        // bucket-level fact, and a cheap clean sibling still steals the buyer.
+        if (!dominated) {
           var kp = key.split('|');
           var isCake = kp[1] && kp[1].lastIndexOf('New Year Cake', 0) === 0;
           if (kp[0] !== 'book' && !isCake) {
             var myRank = STAR_RANK[kp[0] === 'pet' ? kp[3] : kp[2]] || 0;
-            var mkt = nameIdx.get(kp[0] + '|' + kp[1] + '|' + (kp[0] === 'pet' ? kp[2] : kp[3]));
+            var mkt = nameIdx.get(kp[0] === 'pet' ? 'pet|' + kp[1] + '|' + kp[2] : 'item|' + kp[1]);
             if (mkt) {
               for (var q2 = 0; q2 < mkt.length; q2++) {
                 var e2 = mkt[q2];
@@ -910,7 +927,7 @@
   sales.load();
 
   window.FlipEngine = {
-    version: 24,
+    version: 28,
     setNpcTable: function (map) { if (map && typeof map === 'object') NPC_BUY = map; },
     scan: scan,
     rebuild: rebuild,
